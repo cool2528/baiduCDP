@@ -28,6 +28,7 @@ typedef struct baiduRequestInfo
 	std::string shareid;
 	std::string BDCLND;
 	std::string server_filename;
+	ULONGLONG server_time;
 }BAIDUREQUESTINFO, *PBAIDUREQUESTINFO;
 /*
 正则取出内容返回
@@ -79,6 +80,12 @@ typedef struct fileInfo
 文件信息列表数组
 */
 typedef std::vector<BaiduFileInfo> FileTypeArray;
+typedef struct DateTime
+{
+	UINT nYear;
+	UINT nMonth;
+	UINT nDay;
+}DATETIME;
 /*
 分享文件信息
 */
@@ -178,6 +185,10 @@ std::string GetFileSizeType(double dSize);
 时间戳转日期
 */
 std::string timestampToDate(ULONGLONG ctime);
+/*
+分割日期函数
+*/
+DATETIME GetDateTime(const std::string& strTime);
 /*
 编码转换
 */

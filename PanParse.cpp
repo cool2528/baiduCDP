@@ -71,8 +71,17 @@ REQUESTINFO CBaiduParse::ParseBaiduAddr(const std::string strUrl, std::string& s
 		"&timestamp=" + BaiduInfo.timestamp + "&channel=chunlei&web=1&app_id=" + BaiduInfo.app_id + \
 		"&bdstoken=" + BaiduInfo.bdstoken + "&logid=" + GetLogid() + "&clienttype=0";
 	strCookies = BaiduHttp.MergeCookie(strCookies, BaiduHttp.GetResponCookie());
-	strJson = "encrypt=0&product=share&uk=%1%&primaryid=%2%&fid_list=%%5B%3%%%5D&path_list=";
-	strJson = str(boost::format(strJson) % BaiduInfo.uk % BaiduInfo.shareid % BaiduInfo.fs_id);
+	BaiduInfo.BDCLND = GetTextMid(strCookies, "BDCLND=", ";");
+	if (BaiduInfo.BDCLND.empty())
+	{
+		strJson = "encrypt=0&product=share&uk=%1%&primaryid=%2%&fid_list=%%5B%3%%%5D&path_list=";
+		strJson = str(boost::format(strJson) % BaiduInfo.uk % BaiduInfo.shareid % BaiduInfo.fs_id);
+	}
+	else
+	{
+		strJson = "encrypt=0&extra=%%7B%%22sekey%%22%%3A%%22%1%%%22%%7D&product=share&uk=%2%&primaryid=%3%&fid_list=%%5B%4%%%5D&path_list=";
+		strJson = str(boost::format(strJson) % BaiduInfo.BDCLND % BaiduInfo.uk % BaiduInfo.shareid % BaiduInfo.fs_id);
+	}
 	/*准备提交数据获取真实URL地址*/
 	BaiduHttp.SetRequestHeader("Content-Type", " application/x-www-form-urlencoded; charset=UTF-8");
 	BaiduHttp.SetRequestHeader("Accept", " application/json, text/javascript, */*; q=0.01");
@@ -122,6 +131,7 @@ std::string CBaiduParse::GetBaiduAddr(BAIDUREQUESTINFO baiduinfo, const std::str
 	std::string strVcCode;
 	VERCODEINFO verCinfo = GetVerCodeinfo(baiduinfo, strCookies);
 	m_vcCodeUrl = verCinfo.image;
+	std::string strJson;
 	//显示验证码输入窗口
 	ShowInputVerCodeDlg();
 	HttpRequest BaiduHttp;
@@ -129,8 +139,17 @@ std::string CBaiduParse::GetBaiduAddr(BAIDUREQUESTINFO baiduinfo, const std::str
 	std::string strDownloadUrl = "https://pan.baidu.com/api/sharedownload?sign=" + baiduinfo.sign + \
 		"&timestamp=" + baiduinfo.timestamp + "&channel=chunlei&web=1&app_id=" + baiduinfo.app_id + \
 		"&bdstoken=" + baiduinfo.bdstoken + "&logid=" + GetLogid() + "&clienttype=0";
-	std::string strJson = "encrypt=0&product=share&vcode_input=%1%&vcode_str=%2%&uk=%3%&primaryid=%4%&fid_list=%%5B%5%%%5D";
-	strJson = str(boost::format(strJson) % strVcCode % verCinfo.verCode % baiduinfo.uk % baiduinfo.shareid % baiduinfo.fs_id);
+	baiduinfo.BDCLND = GetTextMid(strCookies, "BDCLND=", ";");
+	if (baiduinfo.BDCLND.empty())
+	{
+		strJson = "encrypt=0&product=share&vcode_input=%1%&vcode_str=%2%&uk=%3%&primaryid=%4%&fid_list=%%5B%5%%%5D";
+		strJson = str(boost::format(strJson) % strVcCode % verCinfo.verCode % baiduinfo.uk % baiduinfo.shareid % baiduinfo.fs_id);
+	}
+	else
+	{
+		strJson = "encrypt=0&extra=%%7B%%22sekey%%22%%3A%%22%1%%%22%%7D&product=share&vcode_input=%2%&vcode_str=%3%&uk=%4%&primaryid=%5%&fid_list=%%5B%6%%%5D&path_list=";
+		strJson = str(boost::format(strJson) % baiduinfo.BDCLND % strVcCode % verCinfo.verCode % baiduinfo.uk % baiduinfo.shareid % baiduinfo.fs_id);
+	}
 	/*准备提交数据获取真实URL地址*/
 	BaiduHttp.SetRequestHeader("Content-Type", " application/x-www-form-urlencoded; charset=UTF-8");
 	BaiduHttp.SetRequestHeader("Accept", " application/json, text/javascript, */*; q=0.01");
@@ -217,6 +236,10 @@ BAIDUREQUESTINFO CBaiduParse::GetBaiduInfo(const std::string strJson)
 				if (v.HasMember("server_filename") && v["server_filename"].IsString())
 				{
 					baiduInfo.server_filename = v["server_filename"].GetString();
+				}
+				if (v.HasMember("server_ctime") && v["server_ctime"].IsUint64())
+				{
+					baiduInfo.server_time = v["server_ctime"].GetUint64();
 				}
 				if (v.HasMember("fs_id") && v["fs_id"].IsUint64())
 				{
@@ -692,6 +715,35 @@ std::string CBaiduParse::timestampToDate(ULONGLONG ctime)
 	ZeroMemory(sztime, 100);
 	::strftime(sztime, 100, "%Y-%m-%d", &time);
 	return std::string(sztime);
+}
+
+DATETIME CBaiduParse::GetDateTime(const std::string& strTime)
+{
+	DATETIME rDateTime;
+	ZeroMemory(&rDateTime, sizeof(DATETIME));
+	if (strTime.empty())
+		return rDateTime;
+	std::vector<std::string> resultVec;
+	std::string split = strTime + "-";
+	std::string pattern = "-";
+	std::string strsub;
+	size_t pos = 0;
+	size_t npos = 0;
+	npos = split.find(pattern, pos);
+	while (npos != std::string::npos)
+	{
+		strsub = split.substr(pos, npos - pos);
+		pos = npos + pattern.length();
+		npos = split.find(pattern, pos);
+		resultVec.push_back(strsub);
+	}
+	if (resultVec.size()==3)
+	{
+		rDateTime.nYear = atoi(resultVec.at(0).c_str());
+		rDateTime.nMonth = atoi(resultVec.at(1).c_str());
+		rDateTime.nDay = atoi(resultVec.at(2).c_str());
+	}
+	return rDateTime;
 }
 
 std::string CBaiduParse::GetBaiduLocalFileAddr(const std::string path, const std::string strCookie)

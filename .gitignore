@@ -1,4 +1,4 @@
-#忽略这些依赖的库文件可以到
+﻿#忽略这些依赖的库文件可以到
 #发布页面下载https://github.com/cool2528/baiduCDP/releases
 /.vs
 /include
@@ -23,3 +23,5 @@
 *.log
 *.pch
 *.pdb
+*.rar
+*.zip

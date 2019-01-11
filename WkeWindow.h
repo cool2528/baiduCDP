@@ -68,7 +68,7 @@ typedef struct downloadStatus
 #define ARIA2_TELLACTICE_SENDDATA "{\"method\":\"aria2.tellActive\",\"params\":[\"token:CDP\",[\"gid\",\"status\",\"files\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_GETGLOBAL_STATUS "{\"method\":\"aria2.getGlobalStat\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_TELLSTOPPED "{\"method\":\"aria2.tellStopped\",\"params\":[\"token:CDP\",0,3,[\"gid\",\"status\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\",\"files\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
-#define ARIA2_PURGEDOWNLOAD_RESULT "{\"method\":\"aria2.purgeDownloadResult\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_PURGEDOWNLOAD_RESULT "{\"method\":\"aria2.removeDownloadResult\",\"params\":[\"token:CDP\",\"%1%\",],\"id\":1,\"jsonrpc\":\"2.0\"}"
 //用定时器更新发送查询数据
 #define UPDTAE_UI_TIMEID 508
 class CWkeWindow

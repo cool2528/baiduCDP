@@ -316,8 +316,6 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 			};
 			updateErrorList(strJsonData);
 			GetInstance()->m_ErrorArray.clear();
-			//清除下载失败的文件内存缓存
-			GetInstance()->SendText(GetInstance()->m_BaiduPare.Gbk_To_Utf8(ARIA2_PURGEDOWNLOAD_RESULT));
 		}
 
 	}
@@ -346,8 +344,6 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 				jsCall(es, func, thisObject, jsArg, 1);
 			};
 			addSussedList(strGID);
-			//清除下载的文件内存缓存
-			GetInstance()->SendText(GetInstance()->m_BaiduPare.Gbk_To_Utf8(ARIA2_PURGEDOWNLOAD_RESULT));
 		}
 	}
 	break;
@@ -383,6 +379,9 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 				const char* pbuffer = (const char*)lParam;
 				std::string strGID(pbuffer);
 				delete pbuffer;
+				//清除下载失败的文件内存缓存
+				std::string strformat = str(boost::format(ARIA2_PURGEDOWNLOAD_RESULT) % strGID);
+				GetInstance()->SendText(GetInstance()->m_BaiduPare.Gbk_To_Utf8(strformat.c_str()));
 				if (GetInstance()->m_ErrorArray.empty())
 				{
 					GetInstance()->m_ErrorArray.push_back(strGID);
@@ -1063,6 +1062,7 @@ jsValue CWkeWindow::DownShareFile(jsExecState es, void* param)
 				std::string strTempCookie(((CWkeWindow*)param)->strCookies);
 				if (strTempCookie.empty())
 					return bResult;
+				//优化这里可以使用线程不然卡界面
 				rResult = ((CWkeWindow*)param)->m_BaiduPare.ParseBaiduAddr(arg0str.c_str(), strTempCookie);
 				rResult.strSavePath = "d:/pdf";
 				rResult.strFileName = GetInstance()->m_BaiduPare.Utf8_To_Gbk(rResult.strFileName.c_str());
