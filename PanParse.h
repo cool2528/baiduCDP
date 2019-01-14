@@ -16,6 +16,7 @@
 #define SHARE_FILE_URL_1 "https://pan.baidu.com/share/set?channel=chunlei&clienttype=0&web=1&channel=chunlei&web=1&app_id=250528&bdstoken=%1%&logid=%2%&clienttype=0"
 #define SHARE_FILE_URL_2 "https://pan.baidu.com/share/pset?channel=chunlei&clienttype=0&web=1&channel=chunlei&web=1&app_id=250528&bdstoken=%1%&logid=%2%&clienttype=0"
 #define USER_AGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36"
+#define NETDISK_USER_AGENT "netdisk;6.0.0.12;PC;PC-Windows;10.0.16299;WindowsBaiduYunGuanJia"
 extern HINSTANCE g_hInstance;
 typedef struct baiduRequestInfo
 {
@@ -51,6 +52,7 @@ typedef struct RequestInfo
 	std::string strFileName;
 	std::string strCookies;
 	std::string strSavePath;
+	std::string strUserAegnt;
 }REQUESTINFO;
 /*
 获取用户登陆后的基础信息
@@ -203,5 +205,6 @@ std::string Utf8_To_Gbk(const char* szBuff);
 std::string URL_Coding(const char* szSource, bool isletter = true, bool isUtf8 = true);
 //解析\uxxxx\uxxxx编码字符
 std::string UnEscape(const char* strSource);
+
 };
 #endif

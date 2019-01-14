@@ -118,8 +118,8 @@ REQUESTINFO CBaiduParse::ParseBaiduAddr(const std::string strUrl, std::string& s
 			index++;
 		} while (strRealUrl.strDownloadUrl.empty());
 	}
-	BaiduHttp.Send(HEAD, strRealUrl.strDownloadUrl);
-	strRealUrl.strDownloadUrl = GetTextMid(BaiduHttp.GetallResponseHeaders(), "Location: ", "\r\n");
+// 	BaiduHttp.Send(HEAD, strRealUrl.strDownloadUrl);
+// 	strRealUrl.strDownloadUrl = GetTextMid(BaiduHttp.GetallResponseHeaders(), "Location: ", "\r\n");
 	strRealUrl.strFileName = BaiduInfo.server_filename;
 	strRealUrl.strCookies = strCookies;
 	return strRealUrl;
@@ -763,7 +763,17 @@ std::string CBaiduParse::GetBaiduLocalFileAddr(const std::string path, const std
 	dc.Parse(strResult.c_str());
 	if (!dc.IsObject())
 		return std::string("");
-
+	if (dc.HasMember("urls") && dc["urls"].IsArray())
+	{
+		for (auto& v:dc["urls"].GetArray())
+		{
+			if (v.HasMember("url") && v["url"].IsString())
+			{
+				strResult = v["url"].GetString();
+				break;
+			}
+		}
+	}
 	return strResult;
 }
 
@@ -855,6 +865,7 @@ std::string CBaiduParse::DeleteBaiduFile(const std::string strJsonData, const st
 	return bResult;
 }
 
+
 CBaiduParse::CBaiduParse()
 {
 
@@ -927,6 +938,8 @@ BOOL CBaiduParse::LodcomImage(LPVOID PmemIm, ULONG dwLen, CImage& ImgObj)
 	::GlobalFree(Hglobal);		//释放全局内存申请
 	return bRet;
 }
+
+
 
 CBaiduParse::~CBaiduParse()
 {

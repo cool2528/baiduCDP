@@ -43,6 +43,12 @@ typedef struct downloadStatus
 	std::string strFileGid;	//下载任务唯一的标识符
 	std::string strFileStatus;
 }DOWNLOADSTATUS;
+/*下载失败重试次数*/
+typedef struct retryCount
+{
+	std::string strFileName;
+	UINT nCount;
+}RETRYCOUNT;
 /*
 自定义消息
 */
@@ -54,6 +60,8 @@ typedef struct downloadStatus
 #define ARIA2_DOWNLOAD_ERROR_MSG WM_USER + 0x106
 #define ARIA2_UPDATE_TELLACTIVE_LIST_MSG WM_USER +0x107
 #define ARIA2_UPDATE_TELLERROR_LIST_MSG WM_USER +0x108
+#define ARIA2_PURGEDOWNLOAD_MSG WM_USER +0x109
+#define ARIA2_RETRYADDURL_MSG WM_USER +0x110
 /*
 自定义消息结束
 */
@@ -66,9 +74,12 @@ typedef struct downloadStatus
 /*Aria2下载状态end*/
 /*发送查询的固定数据*/
 #define ARIA2_TELLACTICE_SENDDATA "{\"method\":\"aria2.tellActive\",\"params\":[\"token:CDP\",[\"gid\",\"status\",\"files\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_TELLSTATUS_SENDDATA "{\"method\":\"aria2.tellStatus\",\"params\":[\"token:CDP\",\"%1%\",[\"gid\",\"status\",\"files\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_GETGLOBAL_STATUS "{\"method\":\"aria2.getGlobalStat\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_TELLSTOPPED "{\"method\":\"aria2.tellStopped\",\"params\":[\"token:CDP\",0,3,[\"gid\",\"status\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\",\"files\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
-#define ARIA2_PURGEDOWNLOAD_RESULT "{\"method\":\"aria2.removeDownloadResult\",\"params\":[\"token:CDP\",\"%1%\",],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_PURGEDOWNLOAD_RESULT "{\"method\":\"aria2.removeDownloadResult\",\"params\":[\"token:CDP\",\"%1%\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
+//ARIA2http请求协议
+#define ARIA2_HTTP_REQUESTURL "http://127.0.0.1:6800/jsonrpc"
 //用定时器更新发送查询数据
 #define UPDTAE_UI_TIMEID 508
 class CWkeWindow
@@ -121,11 +132,26 @@ private:
  inline double Getpercentage(double completedLength, double totalLength);
  //存储当前正在下载的任务的GID
  std::vector<DOWNLOADSTATUS> m_DownloadArray;
+ //下载失败重试次数的数组
+ std::vector<RETRYCOUNT> m_RetryArray;
+ //保存分享链接下载文件的信息
+ std::vector<REQUESTINFO> m_ShareFileArray;
+ //添加分享下载信息到数组
+ void AddShareFileItem(REQUESTINFO item);
+ //获取需要的元素信息
+void GetShareFileItem(const std::string& strFileName, REQUESTINFO& Result);
+ //判断重试的次数是否已经用完
+ bool IsRetryCountFinish(const std::string& strFileName);
+ //判断需要重试的任务是否存在不存在就创建
+ bool IsRetryExist(const std::string& strFileName);
+ //修改重试的次数
+ void addRetryCount(const std::string& strFileName);
  //根据唯一标识符从UI界面获取文件的信息
  std::string GetFileCompletedInfo(const std::string& strGid);
- //当任务出现错误停止下载时保存
- std::vector<std::string> m_ErrorArray;
+ //解析下载完成后的json获取文件名
+ std::string GetTellStatusFileName(const std::string& strJSon);
  private:
+#if 1
 	/*wss请求相关回调开始*/
 	//socket init处理程序
 	void on_socket_init(websocketpp::connection_hdl);
@@ -141,13 +167,14 @@ private:
 	websocketpp::connection_hdl m_hdl;
 	//启动与服务端的链接
 	void start(std::string uri);
-	//启动aria2
-	BOOL RunAria2();
 	//连接到aria2的WSS服务端
 	void Connect();
 	//发送文本数据给服务端
 	 void SendText(std::string& strText);
 	/*wss请求相关回调结束*/
+#endif
+	//启动aria2
+	 BOOL RunAria2();
 	//wss运行需要单独启动一个线程
 	std::shared_ptr<std::thread> m_RunThreadPtr;
 	//发送数据给Aria2的定时器回调函数
@@ -230,6 +257,10 @@ public:
 	组装Aria2下载的json信息
 	*/
 	std::string CreateDowndAria2Json(REQUESTINFO& Downdinfo);
+	//字符串替换
+	std::string& replace_all_distinct(std::string& str, const std::string& old_value, const std::string& new_value);
+	// 下载百度网盘内的文件
+	bool DownloadUserLocalFile(const std::string& strJsonData, const std::string& strCookie);
 	/* 回调：创建新的页面，比如说调用了 window.open 或者点击了 <a target="_blank" .../>*/
    static wkeWebView onCreateView(wkeWebView webWindow, void* param, wkeNavigationType navType, const wkeString url, const wkeWindowFeatures* features);
    /*更新正在下载的列表数据到UI界面*/
