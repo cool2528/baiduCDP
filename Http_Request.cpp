@@ -204,7 +204,7 @@ void HttpRequest::AutoAddHeader()
 	}
 	if (!CheckHeaderExist("User-Agent:"))
 	{
-		headerList = curl_slist_append(headerList, "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36");
+		headerList = curl_slist_append(headerList, std::string(std::string("User-Agent:") + USER_AGENT).c_str());
 	}
 }
 
@@ -287,18 +287,82 @@ std::vector<std::string> HttpRequest::StrSplit(const std::string &str, const std
 	}
 	return resultVec;
 }
+RequestHeaderValue HttpRequest::SplitCookie(const std::string strCookie)
+{
+	RequestHeaderValue result;
+	std::vector<std::string> strCookieArr = StrSplit(strCookie, ";");
+	for (auto v : strCookieArr)
+	{
+		int nPos = std::string::npos;
+		int nNext = std::string::npos;
+		nPos = v.find("=");
+		if (nPos!=std::string::npos)
+		{
+			std::string name = v.substr(0, nPos);
+			std::string value = v.substr(nPos + 1, v.length() - (nPos + 1));
+			result.insert({ name,value });
 
+		}
+	}
+	return result;
+}
 std::string HttpRequest::MergeCookie(const std::string wornCookie, const std::string newCookie)
 {
-	std::string strResult = wornCookie;
-	std::vector<std::string> strCookieArr = StrSplit(newCookie, ";");
+	std::string strCookies;
+	std::string strSource;
+	std::string strDest;
+	strSource = wornCookie;
+	strDest = newCookie;
+	if (strSource.at(strSource.length() - 1) != ';')
+		strSource += ";";
+	if (strDest.at(strDest.length() - 1) != ';')
+		strDest += ";";
+	RequestHeaderValue strResult = SplitCookie(strSource);
+	RequestHeaderValue strNewCookie = SplitCookie(strDest);
+	for (auto v : strNewCookie)
+	{
+		std::string key = v.first;
+		auto it = strResult.find(key);
+		if (it!=strResult.end())
+		{
+			strResult.find(key)->second = v.second;
+		}
+		else
+		{
+			strResult.insert({ v.first,v.second });
+		}
+	}
+	for (auto k: strResult)
+		strCookies += k.first + "=" + k.second + ";";
+#if 0
 	for (auto v : strCookieArr)
 	{
 		int npos = std::string::npos;
-		if (strResult.find(v) == npos)
-			strResult += v + ";";
+		int nNextPos = std::string::npos;
+		RequestHeaderValue item;
+		item = SplitCookie(v);
+		if (item.size()==2)
+		{
+			std::string strName = item.at("name");
+			std::string strKey = item.at("key");
+			npos = strResult.find(strName);
+			if (npos != std::string::npos)
+			{
+				nNextPos = strResult.find(";", npos);
+				if (nNextPos!=std::string::npos)
+				{
+					strResult = strResult.replace(npos + strName.length(), nNextPos, strKey, 0, strKey.length());
+				}
+				
+			}
+			else
+			{
+				strResult += v + ";";
+			}
+		}
 	}
-	return strResult;
+#endif
+	return strCookies;
 }
 
 bool HttpRequest::CheckHeaderExist(const std::string strHeaderKey)

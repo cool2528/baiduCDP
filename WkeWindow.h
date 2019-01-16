@@ -4,6 +4,14 @@
 #include <websocketpp/client.hpp>
 #include "GlobalHeader.h"
 #include "PanParse.h"
+#include "glog/logging.h"
+// #define GOOGLE_GLOG_DLL_DECL
+// #define GLOG_NO_ABBREVIATED_SEVERITIES
+#ifndef _DEBUG
+#pragma comment(lib,"glog.lib")
+#else
+#pragma  comment(lib,"glogd.lib")
+#endif
 typedef websocketpp::client<websocketpp::config::asio_client> client;
 using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
@@ -21,6 +29,7 @@ typedef struct downFileListInfo
 	std::string strFileGid;
 	UINT nErrCode;
 	std::string strErrMessage;
+	std::string strStatus;	//当前文件的下载状态
 }DOWNFILELISTINFO;
 typedef std::vector<DOWNFILELISTINFO> ActiceDownloadList;
 /*
@@ -76,8 +85,14 @@ typedef struct retryCount
 #define ARIA2_TELLACTICE_SENDDATA "{\"method\":\"aria2.tellActive\",\"params\":[\"token:CDP\",[\"gid\",\"status\",\"files\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_TELLSTATUS_SENDDATA "{\"method\":\"aria2.tellStatus\",\"params\":[\"token:CDP\",\"%1%\",[\"gid\",\"status\",\"files\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_GETGLOBAL_STATUS "{\"method\":\"aria2.getGlobalStat\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
-#define ARIA2_TELLSTOPPED "{\"method\":\"aria2.tellStopped\",\"params\":[\"token:CDP\",0,3,[\"gid\",\"status\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\",\"files\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_TELLSTOPPED "{\"method\":\"aria2.tellStopped\",\"params\":[\"token:CDP\",0,%1%,[\"gid\",\"status\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\",\"files\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_TELLWAITING "{\"method\":\"aria2.tellWaiting\",\"params\":[\"token:CDP\",0,%1%,[\"gid\",\"status\",\"totalLength\",\"completedLength\",\"downloadSpeed\",\"connections\",\"errorCode\",\"errorMessage\",\"files\"]],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_PURGEDOWNLOAD_RESULT "{\"method\":\"aria2.removeDownloadResult\",\"params\":[\"token:CDP\",\"%1%\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_UNPAUSE "{\"method\":\"aria2.unpause\",\"params\":[\"token:CDP\",\"%1%\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_PAUSE "{\"method\":\"aria2.pause\",\"params\":[\"token:CDP\",\"%1%\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_REMOVE "{\"method\":\"aria2.remove\",\"params\":[\"token:CDP\",\"%1%\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_FORCEPAUSEALL "{\"method\":\"aria2.forcePauseAll\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
+#define ARIA2_UNAUSEALL "{\"method\":\"aria2.unpauseAll\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
 //ARIA2http请求协议
 #define ARIA2_HTTP_REQUESTURL "http://127.0.0.1:6800/jsonrpc"
 //用定时器更新发送查询数据
@@ -124,14 +139,16 @@ private:
  void ParseAria2JsonInfo(const std::string& strJSon);
  //aria2当前活动的下载数量
  size_t numActive;
- //aria2 当前失败的下载数量
+ //aria2 当前停止的下载数量
  size_t numStopped;
+ //aria2 当前等待下载的数量
+ size_t numWaiting;
+ //下载文件保存的路径
+ std::string m_downloadSavePath;
  //获取文件大小类型
  inline std::string GetFileSizeType(double dSize);
  //取百分比
  inline double Getpercentage(double completedLength, double totalLength);
- //存储当前正在下载的任务的GID
- std::vector<DOWNLOADSTATUS> m_DownloadArray;
  //下载失败重试次数的数组
  std::vector<RETRYCOUNT> m_RetryArray;
  //保存分享链接下载文件的信息
@@ -207,11 +224,19 @@ public:
 	系统菜单JS回调函数
 	*/
 	static jsValue SysMenuJsNativeFunction(jsExecState es, void* param);
+
+	/*
+	退出当前账号
+	*/
+	static jsValue LogOut(jsExecState es, void* param);
 	/*
 	验证是否已经有效的登录了百度网盘
 	*/
 	static jsValue IsLoginBaidu(jsExecState es, void* param);
-
+	/*
+	暂停/恢复/删除下载
+	*/
+	static jsValue AraiaPauseStartRemove(jsExecState es, void* param);
 	/*
 	分享文件回调函数
 	*/
@@ -260,7 +285,7 @@ public:
 	//字符串替换
 	std::string& replace_all_distinct(std::string& str, const std::string& old_value, const std::string& new_value);
 	// 下载百度网盘内的文件
-	bool DownloadUserLocalFile(const std::string& strJsonData, const std::string& strCookie);
+	bool DownloadUserLocalFile(const std::string& strJsonData);
 	/* 回调：创建新的页面，比如说调用了 window.open 或者点击了 <a target="_blank" .../>*/
    static wkeWebView onCreateView(wkeWebView webWindow, void* param, wkeNavigationType navType, const wkeString url, const wkeWindowFeatures* features);
    /*更新正在下载的列表数据到UI界面*/
@@ -281,6 +306,8 @@ public:
 	读取本地文件资源
 	*/
 	void readJsFile(const wchar_t* path, std::vector<char>* buffer);
+	/*读取文件*/
+	DWORD ReadFileBuffer(std::string szFileName, PVOID* pFileBuffer);
 	/*
 	@ 初始化miniblink
 	*/

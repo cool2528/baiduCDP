@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <curl/curl.h>
+#define USER_AGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:64.0) Gecko/20100101 Firefox/64.0"
 /*
  用来操作HTTP协议请求
  核心使用libcurl
@@ -83,6 +84,10 @@ private:
 	取返回协议头cookies
 	*/
 	std::string GetCookies(const std::string strHeader);
+	/*
+	合并cookie内部处理
+	*/
+	RequestHeaderValue SplitCookie(const std::string strCookie);
 	/*
 	字符串分割
 	*/
