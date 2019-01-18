@@ -30,6 +30,9 @@
     <ClCompile Include="Http_Request.cpp">
       <Filter>BaiduParse</Filter>
     </ClCompile>
+    <ClCompile Include="shadow_window.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="WkeWindow.h">
@@ -51,6 +54,9 @@
       <Filter>BaiduParse</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="shadow_window.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

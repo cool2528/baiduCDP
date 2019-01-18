@@ -15,6 +15,7 @@
 #define DOWN_LOCAL_FILE "http://d.pcs.baidu.com/rest/2.0/pcs/file?app_id=250528&channel=00000000000000000000000000000000&check_blue=1&clienttype=8&devuid=0&dtype=1&ehps=0&err_ver=1.0&es=1&esl=1&method=locatedownload&path=%1%&ver=4.0&version=6.0.0.12&vip=3"
 #define SHARE_FILE_URL_1 "https://pan.baidu.com/share/set?channel=chunlei&clienttype=0&web=1&channel=chunlei&web=1&app_id=250528&bdstoken=%1%&logid=%2%&clienttype=0"
 #define SHARE_FILE_URL_2 "https://pan.baidu.com/share/pset?channel=chunlei&clienttype=0&web=1&channel=chunlei&web=1&app_id=250528&bdstoken=%1%&logid=%2%&clienttype=0"
+#define DISK_CAPACITY_QUERY "https://pan.baidu.com/api/quota?app_id=250528&bdstoken=%1%&channel=chunlei&checkexpire=1&checkfree=1&clienttype=0&web=1"
 #define NETDISK_USER_AGENT "netdisk;6.0.0.12;PC;PC-Windows;10.0.16299;WindowsBaiduYunGuanJia"
 extern HINSTANCE g_hInstance;
 typedef struct baiduRequestInfo
@@ -42,6 +43,7 @@ typedef struct verCodeinfo
 	std::string image;
 	std::string verCode;
 }VERCODEINFO;
+
 /*
 返回解析出来的真实地址以及文件的名称
 */
@@ -61,6 +63,8 @@ typedef struct userInfo
 	std::string strUserName;
 	std::string strHeadImageUrl;
 	std::string bdstoken;
+	std::string strDisktotal;
+	std::string strDiskUsed;
 	int is_vip;
 }BaiduUserInfo;
 /*

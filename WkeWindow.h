@@ -4,6 +4,7 @@
 #include <websocketpp/client.hpp>
 #include "GlobalHeader.h"
 #include "PanParse.h"
+#include "shadow_window.h"
 #include "glog/logging.h"
 // #define GOOGLE_GLOG_DLL_DECL
 // #define GLOG_NO_ABBREVIATED_SEVERITIES
@@ -97,6 +98,20 @@ typedef struct retryCount
 #define ARIA2_HTTP_REQUESTURL "http://127.0.0.1:6800/jsonrpc"
 //用定时器更新发送查询数据
 #define UPDTAE_UI_TIMEID 508
+//
+typedef BOOL(WINAPI *pfnUpdateLayeredWindow)(HWND hWnd, HDC hdcDst, POINT *pptDst,
+	SIZE *psize, HDC hdcSrc, POINT *pptSrc, COLORREF crKey,
+	BLENDFUNCTION *pblend, DWORD dwFlags);
+typedef HRESULT(WINAPI *pfnDwmIsCompositionEnabled)(BOOL *pfEnabled);
+typedef void(__stdcall *pfnAdjustShadows)(void * pCallbackData, LPBITMAPINFO pBmpinfo, UINT32 *pShadBits, long lxShadowSize, long lcxOffset, long lcyOffset);
+
+enum ShadowStatus
+{
+	SS_ENABLED = 1,
+	SS_VISABLE = 1 << 1,	
+	SS_PARENTVISIBLE = 1 << 2,	
+	SS_DISABLEDBYAERO = 1 << 3
+};
 class CWkeWindow
 {
 public:
@@ -119,6 +134,10 @@ private:
 	std::string strCookies;
 	/*百度网盘解析相关*/
 	CBaiduParse m_BaiduPare;
+	/*
+	阴影窗口
+	*/
+	ShadowWnd* m_ShadowWnd;
 	/*
 	Wss请求相关
 	*/
@@ -196,6 +215,7 @@ void GetShareFileItem(const std::string& strFileName, REQUESTINFO& Result);
 	std::shared_ptr<std::thread> m_RunThreadPtr;
 	//发送数据给Aria2的定时器回调函数
 	static void CALLBACK TimeProc(HWND hwnd, UINT message, UINT iTimerID, DWORD dwTime);
+
 public:
 	/*
 	@启动程序

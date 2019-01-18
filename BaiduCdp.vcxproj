@@ -85,6 +85,7 @@
     <ClCompile Include="Http_Request.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PanParse.cpp" />
+    <ClCompile Include="shadow_window.cpp" />
     <ClCompile Include="WkeWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -93,6 +94,7 @@
     <ClInclude Include="Http_Request.h" />
     <ClInclude Include="PanParse.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="shadow_window.h" />
     <ClInclude Include="wke.h" />
     <ClInclude Include="WkeWindow.h" />
   </ItemGroup>

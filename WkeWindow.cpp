@@ -722,6 +722,7 @@ void CALLBACK CWkeWindow::TimeProc(HWND hwnd, UINT message, UINT iTimerID, DWORD
 #endif
 }
 
+
 void CWkeWindow::runApp(Application* app)
 {
 	DWORD dwThread = ::GetThreadId(::GetCurrentThread());
@@ -798,7 +799,7 @@ void CWkeWindow::runMessageLoop(Application* app)
 }
 bool CWkeWindow::createWebWindow(Application* app)
 {
-	app->window = wkeCreateWebWindow(WKE_WINDOW_TYPE_TRANSPARENT, NULL, 0, 0, 1024, 700);
+	app->window = wkeCreateWebWindow(WKE_WINDOW_TYPE_POPUP, NULL, 0, 0, 1024, 630);
 	if (!app->window)
 		return false;
 	//设置全局cookies/缓存路径
@@ -811,7 +812,20 @@ bool CWkeWindow::createWebWindow(Application* app)
 	wkeSetLocalStorageFullPath(app->window, szRootPath.c_str());
 	//保存主窗口的窗口句柄
  	m_hwnd = wkeGetWindowHandle(app->window);
- 	m_oldProc =(WNDPROC)::SetWindowLongPtr(m_hwnd, GWL_WNDPROC, (DWORD)MainProc);
+	LONG styleValue = ::GetWindowLong(m_hwnd, GWL_STYLE);
+	styleValue &= ~WS_CAPTION;
+	styleValue &= ~WS_MAXIMIZEBOX;
+	styleValue &= ~WS_MINIMIZEBOX;
+	styleValue &= ~WS_THICKFRAME;
+	styleValue &= ~WS_BORDER;
+	styleValue &= ~WS_CAPTION;
+	::SetWindowLong(m_hwnd, GWL_STYLE, styleValue | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+	DWORD dwExStyle = ::GetWindowLong(m_hwnd, GWL_EXSTYLE);
+	::SetWindowLong(m_hwnd, GWL_EXSTYLE, dwExStyle | WS_EX_LAYERED);
+ 	m_oldProc = (WNDPROC)::SetWindowLongPtr(m_hwnd, GWL_WNDPROC, (DWORD)MainProc);
+	m_ShadowWnd = BindShadowWindow(m_hwnd);
+	if (m_ShadowWnd)
+		m_ShadowWnd->Setup(5, 8, 192, 0);
 	::SetTimer(m_hwnd, UPDTAE_UI_TIMEID, 1000, TimeProc);
 	//设置窗口的标题
 	wkeSetWindowTitleW(app->window, APP_NAME);
@@ -1056,7 +1070,7 @@ wkeWebView CWkeWindow::onCreateView(wkeWebView webWindow, void* param, wkeNaviga
 			return newWindow;
 		};
 		wkeOnCreateView(newWindow, subCreateView, wkeGetWindowHandle(newWindow));
-		//wkeSetDebugConfig(app.window, "showDevTools", GetInstance()->m_BaiduPare.Gbk_To_Utf8("E:\\Download\\miniblink-181214\\front_end\\inspector.html").c_str());
+		wkeSetDebugConfig(app.window, "showDevTools", GetInstance()->m_BaiduPare.Gbk_To_Utf8("E:\\Download\\miniblink-181214\\front_end\\inspector.html").c_str());
 	}
 	wkeShowWindow(newWindow, true);
 	return newWindow;
@@ -1248,7 +1262,8 @@ jsValue CWkeWindow::IsLoginBaidu(jsExecState es, void* param)
 					/*
 					已经登录百度让登录百度的按钮隐藏
 					*/
-					wkeRunJS(app.window, "app.tablelistisShwo = true;");
+					std::string strData = str(boost::format("app.tablelistisShwo = true; app.DiskUsed = '%1%';  app.DiskTotal = '%2%';") % baiduInfo.strDiskUsed % baiduInfo.strDisktotal);
+					wkeRunJS(app.window, strData.c_str());
 					jsExecState es = wkeGlobalExec(app.window);
 					jsValue thisObject = jsGetGlobal(es, "app");
 					bool b = jsIsObject(thisObject);
@@ -1707,13 +1722,14 @@ bool CWkeWindow::DownloadUserLocalFile(const std::string& strJsonData)
 }
 
 CWkeWindow::CWkeWindow()
-:isLogin(false),
-strCookies(""),
-m_hwnd(NULL),
-numActive(NULL),
-numStopped(NULL),
-numWaiting(NULL),
-m_downloadSavePath("")
+:isLogin(false)
+,strCookies("")
+,m_hwnd(NULL)
+,numActive(NULL)
+,numStopped(NULL)
+,numWaiting(NULL)
+,m_downloadSavePath("")
+,m_ShadowWnd(nullptr)
 {
 	try
 	{

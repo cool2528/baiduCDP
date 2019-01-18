@@ -439,6 +439,20 @@ bool CBaiduParse::GetloginBassInfo(BaiduUserInfo& baseInfo, const std::string st
 		baseInfo.strHeadImageUrl = dc["photo"].GetString();
 	if (dc.HasMember("is_vip") && dc["is_vip"].IsInt())
 		baseInfo.is_vip = dc["is_vip"].GetInt();
+
+	BaiduHttp.Send(GET, str(boost::format(DISK_CAPACITY_QUERY) % baseInfo.bdstoken));
+	strResult = BaiduHttp.GetResponseText();
+	dc.Parse(strResult.c_str());
+	if (!dc.IsObject())
+		return false;
+	if (dc.HasMember("total") && dc["total"].IsUint64())
+	{
+		baseInfo.strDisktotal = GetFileSizeType(dc["total"].GetUint64());
+	}
+	if (dc.HasMember("used") && dc["used"].IsUint64())
+	{
+		baseInfo.strDiskUsed = GetFileSizeType(dc["used"].GetUint64());
+	}
 	return true;
 }
 
