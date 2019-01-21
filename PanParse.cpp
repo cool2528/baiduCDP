@@ -13,6 +13,7 @@
 #pragma comment(lib,"shlwapi.lib")
 std::string CBaiduParse::m_vcCodeUrl;
 std::string CBaiduParse::m_VerCode;
+std::string CBaiduParse::m_SharePass;
 DWORD CBaiduParse::WriteFileBuffer(std::string szFileNmae, PVOID pFileBuffer, DWORD dwFileSize)
 {
 	DWORD dwStates = -1;
@@ -53,6 +54,8 @@ DWORD CBaiduParse::WriteFileBuffer(std::string szFileNmae, PVOID pFileBuffer, DW
 }
 REQUESTINFO CBaiduParse::ParseBaiduAddr(const std::string strUrl, std::string& strCookies)
 {
+	std::string strWebUrl = strUrl;
+	int nResult = IsPassWordShareUrl(strWebUrl, strCookies);
 	HttpRequest BaiduHttp;
 	BAIDUREQUESTINFO BaiduInfo;
 	REQUESTINFO strRealUrl;
@@ -124,6 +127,72 @@ REQUESTINFO CBaiduParse::ParseBaiduAddr(const std::string strUrl, std::string& s
 	strRealUrl.strCookies = strCookies;
 	return strRealUrl;
 }
+
+int CBaiduParse::IsPassWordShareUrl(std::string& strUrl, std::string& strCookies)
+{
+	int nResult = -1;
+	if (strUrl.empty() || strCookies.empty())
+	{
+		return nResult;
+	}
+	HttpRequest BaiduHttp;
+	int nPos = std::string::npos;
+	BaiduHttp.SetRequestCookies(strCookies);
+	BaiduHttp.Send(GET,strUrl);
+	strCookies = BaiduHttp.MergeCookie(strCookies, BaiduHttp.GetResponCookie());
+	std::string&& strRetHeader = BaiduHttp.GetallResponseHeaders();
+	nPos = strRetHeader.find("Location:");
+	if (nPos != std::string::npos)
+	{
+		strUrl = GetTextMid(strRetHeader, "Location:", "\r\n");
+		if (!strUrl.empty())
+		{
+			strUrl.erase(0, strUrl.find_first_not_of(" "));
+			nPos = strUrl.rfind("surl=");
+			if (nPos!=std::string::npos)
+			{
+				int index = 0;
+				int nError = 0;
+				do 
+				{
+
+					ShowInputPassDlg();
+					std::string strKey = strUrl.substr(nPos + lstrlenA("surl="), strUrl.length() - nPos);
+					std::string strReferer = "https://pan.baidu.com/share/init?surl=" + strKey;
+					strUrl = str(boost::format("https://pan.baidu.com/share/verify?surl=%1%&t=%2%&channel=chunlei&web=1&app_id=250528&bdstoken=null&logid=%3%&clienttype=0") % strKey % getTimeStamp() % GetLogid());
+					std::string strPost = str(boost::format("pwd=%1%&vcode=&vcode_str=") % m_SharePass);
+					BaiduHttp.SetRequestHeader("Referer", strReferer);
+					BaiduHttp.Send(POST, strUrl, strPost);
+					std::string strResult = BaiduHttp.GetResponseText();
+					rapidjson::Document dc;
+					if (index>5)
+						break;
+					dc.Parse(strResult.c_str());
+					if (!dc.IsObject())
+					{
+						return nResult;
+					}
+					if (dc.HasMember("errno") && dc["errno"].IsInt())
+					{
+						nError = dc["errno"].GetInt();
+					}
+					index++;
+				} while (nError != 0);
+				strCookies = BaiduHttp.MergeCookie(strCookies, BaiduHttp.GetResponCookie());
+				nResult = 1;
+			}else
+				nResult = 0;
+		}
+		else
+			nResult = 0;
+	}
+	else
+	{
+		nResult = 0;
+	}
+	return nResult;
+}
+
 std::string CBaiduParse::GetBaiduAddr(BAIDUREQUESTINFO baiduinfo, const std::string strCookies)
 {
 
@@ -236,6 +305,10 @@ BAIDUREQUESTINFO CBaiduParse::GetBaiduInfo(const std::string strJson)
 				if (v.HasMember("server_filename") && v["server_filename"].IsString())
 				{
 					baiduInfo.server_filename = v["server_filename"].GetString();
+				}
+				if (v.HasMember("isdir") && v["isdir"].IsUint())
+				{
+					baiduInfo.n_isdir = v["isdir"].GetUint();
 				}
 				if (v.HasMember("server_ctime") && v["server_ctime"].IsUint64())
 				{
@@ -483,6 +556,39 @@ REGEXVALUE CBaiduParse::GetRegexValue(const std::string strvalue, const std::str
 void CBaiduParse::ShowInputVerCodeDlg()
 {
 	::DialogBox(g_hInstance, MAKEINTRESOURCE(IDD_VERCODE), GetDesktopWindow(), ImageProc);
+}
+
+INT_PTR CALLBACK CBaiduParse::ShareProc(_In_ HWND hwndDlg, _In_ UINT uMsg, _In_ WPARAM wParam, _In_ LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_COMMAND:
+	{
+		switch (LOWORD(wParam))
+		{
+		case IDC_BTN_OK:
+		{
+			char szCode[MAX_PATH];
+			ZeroMemory(szCode, MAX_PATH);
+			::GetDlgItemTextA(hwndDlg, IDC_EDIT_PASS, szCode, MAX_PATH);
+			m_SharePass = szCode;
+			::EndDialog(hwndDlg, 0);
+		}
+		break;
+		default:
+			break;
+		}
+	}
+	break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+void CBaiduParse::ShowInputPassDlg()
+{
+	::DialogBox(g_hInstance, MAKEINTRESOURCE(IDD_SHAREPASS), GetDesktopWindow(), ShareProc);
 }
 
 std::string CBaiduParse::GetBaiduFileListInfo(const std::string& path, const std::string strCookie)

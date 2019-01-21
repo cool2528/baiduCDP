@@ -1,6 +1,7 @@
 #include "WkeWindow.h"
 #include <shlwapi.h>
 #include <WinInet.h>
+#include <io.h>
 #include <fstream>
 #include <stdexcept>
 #include <boost/format.hpp>
@@ -120,6 +121,7 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 						char szName[MAX_PATH];
 						ZeroMemory(szName, MAX_PATH);
 						std::string szFileName = m_BaiduPare.Utf8_To_Gbk(keyval["path"].GetString());
+						ItemValue.strPath = szFileName;
 						CopyMemory(szName, szFileName.c_str(), szFileName.length());
 						PathStripPathA(szName);
 						ItemValue.strFileName = szName;
@@ -154,6 +156,9 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 			rapidjson::Value status(rapidjson::kStringType);//下载文件状态
 			status.SetString(ItemValue.strStatus.c_str(), ItemValue.strStatus.length(), sendJson.GetAllocator());
 			sendItemObj.AddMember(rapidjson::StringRef("status"), status, sendJson.GetAllocator());
+			rapidjson::Value strPath(rapidjson::kStringType);//下载文件路径
+			strPath.SetString(ItemValue.strPath.c_str(), ItemValue.strPath.length(), sendJson.GetAllocator());
+			sendItemObj.AddMember(rapidjson::StringRef("path"), strPath, sendJson.GetAllocator());
 			arrlist.PushBack(sendItemObj, sendJson.GetAllocator());
 		}
 		//发送给UI线程
@@ -214,6 +219,7 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 						char szName[MAX_PATH];
 						ZeroMemory(szName, MAX_PATH);
 						std::string szFileName = m_BaiduPare.Utf8_To_Gbk(keyval["path"].GetString());
+						ItemValue.strPath = szFileName;
 						CopyMemory(szName, szFileName.c_str(), szFileName.length());
 						PathStripPathA(szName);
 						ItemValue.strFileName = szName;
@@ -257,6 +263,50 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 					//重试一次后增加一次重试的次数
 					addRetryCount(ItemValue.strFileName);
 				}
+				else
+				{
+					ItemValue.Downloadpercentage = (size_t)Getpercentage(completedLength, totalLength);
+					ItemValue.DownloadSpeed = GetFileSizeType(downloadSpeed);
+					rapidjson::Value connections(rapidjson::kStringType);//当前服务器下载链接数量
+					connections.SetString(ItemValue.connections.c_str(), ItemValue.connections.length(), sendJson.GetAllocator());
+					sendItemObj.AddMember(rapidjson::StringRef("connections"), connections, sendJson.GetAllocator());
+					rapidjson::Value downloadSpeedItem(rapidjson::kStringType);//下载速度每秒
+					downloadSpeedItem.SetString(ItemValue.DownloadSpeed.c_str(), ItemValue.DownloadSpeed.length(), sendJson.GetAllocator());
+					sendItemObj.AddMember(rapidjson::StringRef("downloadSpeed"), downloadSpeedItem, sendJson.GetAllocator());
+					rapidjson::Value FileName(rapidjson::kStringType);//当前任务的文件名
+					FileName.SetString(ItemValue.strFileName.c_str(), ItemValue.strFileName.length(), sendJson.GetAllocator());
+					sendItemObj.AddMember(rapidjson::StringRef("name"), FileName, sendJson.GetAllocator());
+					rapidjson::Value Gid(rapidjson::kStringType);//当前任务GID唯一标识符
+					Gid.SetString(ItemValue.strFileGid.c_str(), ItemValue.strFileGid.length(), sendJson.GetAllocator());
+					sendItemObj.AddMember(rapidjson::StringRef("gid"), Gid, sendJson.GetAllocator());
+					rapidjson::Value Downloadpercentage(rapidjson::kNumberType);//当前下载的百分百
+					Downloadpercentage.SetUint(ItemValue.Downloadpercentage);
+					sendItemObj.AddMember(rapidjson::StringRef("progress"), Downloadpercentage, sendJson.GetAllocator());
+					rapidjson::Value nErrCode(rapidjson::kNumberType);//下载错误代码
+					nErrCode.SetUint(ItemValue.nErrCode);
+					sendItemObj.AddMember(rapidjson::StringRef("errorCode"), nErrCode, sendJson.GetAllocator());
+					rapidjson::Value ErrMessage(rapidjson::kStringType);//下载错误原因
+					ErrMessage.SetString(ItemValue.strErrMessage.c_str(), ItemValue.strErrMessage.length(), sendJson.GetAllocator());
+					sendItemObj.AddMember(rapidjson::StringRef("errorMessage"), ErrMessage, sendJson.GetAllocator());
+					rapidjson::Value strPath(rapidjson::kStringType);//下载文件路径
+					strPath.SetString(ItemValue.strPath.c_str(), ItemValue.strPath.length(), sendJson.GetAllocator());
+					sendItemObj.AddMember(rapidjson::StringRef("path"), strPath, sendJson.GetAllocator());
+					arrlist.PushBack(sendItemObj, sendJson.GetAllocator());
+					//发送给UI线程
+					sendJson.AddMember(rapidjson::StringRef("data"), arrlist, sendJson.GetAllocator());
+					rapidjson::StringBuffer buffer;
+					rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+					sendJson.Accept(writer);
+					std::string strResultJson = buffer.GetString();
+					strResultJson = m_BaiduPare.Gbk_To_Utf8(strResultJson.c_str());
+					PVOID pSendDataPtr = AlloclocalHeap(strResultJson);
+					::PostMessage(m_hwnd, ARIA2_UPDATE_TELLERROR_LIST_MSG, NULL, (LPARAM)pSendDataPtr);
+					if (_access(ItemValue.strPath.c_str(), 0) != -1 && _access((ItemValue.strPath + ".aria2").c_str(), 0) != -1)
+					{
+						DeleteFileA(ItemValue.strPath.c_str());
+						DeleteFileA((ItemValue.strPath + ".aria2").c_str());
+					}
+				}
 			}
 			else
 			{
@@ -283,6 +333,9 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 				rapidjson::Value ErrMessage(rapidjson::kStringType);//下载错误原因
 				ErrMessage.SetString(ItemValue.strErrMessage.c_str(), ItemValue.strErrMessage.length(), sendJson.GetAllocator());
 				sendItemObj.AddMember(rapidjson::StringRef("errorMessage"), ErrMessage, sendJson.GetAllocator());
+				rapidjson::Value strPath(rapidjson::kStringType);//下载文件路径
+				strPath.SetString(ItemValue.strPath.c_str(), ItemValue.strPath.length(), sendJson.GetAllocator());
+				sendItemObj.AddMember(rapidjson::StringRef("path"), strPath, sendJson.GetAllocator());
 				arrlist.PushBack(sendItemObj, sendJson.GetAllocator());
 				//发送给UI线程
 				sendJson.AddMember(rapidjson::StringRef("data"), arrlist, sendJson.GetAllocator());
@@ -293,6 +346,11 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 				strResultJson = m_BaiduPare.Gbk_To_Utf8(strResultJson.c_str());
 				PVOID pSendDataPtr = AlloclocalHeap(strResultJson);
 				::PostMessage(m_hwnd, ARIA2_UPDATE_TELLERROR_LIST_MSG, NULL, (LPARAM)pSendDataPtr);
+				if (_access(ItemValue.strPath.c_str(), 0) != -1 && _access((ItemValue.strPath+".aria2").c_str(), 0)!=-1)
+				{
+					DeleteFileA(ItemValue.strPath.c_str());
+					DeleteFileA((ItemValue.strPath + ".aria2").c_str());
+				}
 			}
 		}
 	}
@@ -393,26 +451,26 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 			const char* pbuffer = (const char*)lParam;
 			std::string strGID(pbuffer);
 			delete pbuffer;
-			std::string strFileName = GetInstance()->GetFileCompletedInfo(strGID);
-			if (strFileName.empty())
+			DOWNFILELISTINFO strFileName = GetInstance()->GetFileCompletedInfo(strGID);
+			if (strFileName.strFileName.empty())
 			{
 				HttpRequest aria2_http;
 				std::string strformat = str(boost::format(ARIA2_TELLSTATUS_SENDDATA) % strGID);
 				aria2_http.Send(POST, ARIA2_HTTP_REQUESTURL, strformat);
 				std::string strResult = aria2_http.GetResponseText();
 				strFileName = GetInstance()->GetTellStatusFileName(strResult);
-				strFileName = GetInstance()->m_BaiduPare.Gbk_To_Utf8(strFileName.c_str());
+				strFileName.strFileName = GetInstance()->m_BaiduPare.Gbk_To_Utf8(strFileName.strFileName.c_str());
 			}
 			//更新数据到已下载完成列表
-			static auto addSussedList = [](const std::string Gid) {
-				std::string buffer = str(boost::format("{\"name\":\"%1%\",\"ChangeTime\":\"%2%\"}") % Gid % GetInstance()->m_BaiduPare.timestampToDate((ULONGLONG)time(NULL)));
+			static auto addSussedList = [](const DOWNFILELISTINFO Gid) {
+				std::string buffer = str(boost::format("{\"name\":\"%1%\",\"ChangeTime\":\"%2%\",\"path\":\"%3%\"}") % Gid.strFileName % GetInstance()->m_BaiduPare.timestampToDate((ULONGLONG)time(NULL)) % Gid.strPath);
 				jsExecState es = wkeGlobalExec(app.window);
 				jsValue thisObject = jsGetGlobal(es, "app");
 				jsValue func = jsGet(es, thisObject, "updatedownloadSussedList");
 				jsValue jsArg[1] = { jsString(es, buffer.c_str()) };
 				jsCall(es, func, thisObject, jsArg, 1);
 			};
-			LOG(INFO) << "某个任务下载完成" << strFileName.c_str();
+			LOG(INFO) << "某个任务下载完成" << strFileName.strFileName.c_str();
 			addSussedList(strFileName);
 		}
 	}
@@ -541,10 +599,11 @@ void CWkeWindow::addRetryCount(const std::string& strFileName)
 	}
 }
 
-std::string CWkeWindow::GetFileCompletedInfo(const std::string& strGid)
+DOWNFILELISTINFO CWkeWindow::GetFileCompletedInfo(const std::string& strGid)
 {
 	std::string StrJson="{\"data\":";
-	std::string strResult;
+	DOWNFILELISTINFO strResult;
+	ZeroMemory(&strResult, sizeof(DOWNFILELISTINFO));
 	jsExecState es = wkeGlobalExec(app.window);
 	jsValue thisObject = jsGetGlobal(es, "app");
 	jsValue func = jsGet(es, thisObject, "GetBackupListString");
@@ -565,7 +624,9 @@ std::string CWkeWindow::GetFileCompletedInfo(const std::string& strGid)
 				if (strGid == v["gid"].GetString())
 				{
 					if (v.HasMember("name") && v["name"].IsString())
-						strResult = v["name"].GetString();
+						strResult.strFileName = v["name"].GetString();
+					if (v.HasMember("path") && v["path"].IsString())
+						strResult.strPath = v["path"].GetString();
 				}
 			}
 		}
@@ -573,9 +634,9 @@ std::string CWkeWindow::GetFileCompletedInfo(const std::string& strGid)
 	return strResult;
 }
 
-std::string CWkeWindow::GetTellStatusFileName(const std::string& strJSon)
+DOWNFILELISTINFO CWkeWindow::GetTellStatusFileName(const std::string& strJSon)
 {
-	std::string strResult;
+	DOWNFILELISTINFO strResult;
 	rapidjson::Document dc;
 	dc.Parse(strJSon.c_str());
 	if (!dc.IsObject())
@@ -596,9 +657,10 @@ std::string CWkeWindow::GetTellStatusFileName(const std::string& strJSon)
 						char szName[MAX_PATH];
 						ZeroMemory(szName, MAX_PATH);
 						std::string szFileName = m_BaiduPare.Utf8_To_Gbk(keyval["path"].GetString());
+						strResult.strPath = szFileName;
 						CopyMemory(szName, szFileName.c_str(), szFileName.length());
 						PathStripPathA(szName);
-						strResult = szName;
+						strResult.strFileName = szName;
 					}
 				}
 			}
@@ -864,6 +926,8 @@ bool CWkeWindow::createWebWindow(Application* app)
 	wkeJsBindFunction("AraiaPauseStartRemove", AraiaPauseStartRemove, this, 2);
 	//绑定一个退出百度登录账号的函数
 	wkeJsBindFunction("LogOut", LogOut, this, 0);
+	//打开文件所在文件目录
+	wkeJsBindFunction("OpenFilePlaceFolder", OpenFilePlaceFolder, this,2);
 	return true;
 }
 
@@ -997,6 +1061,12 @@ void CWkeWindow::GetLoginCookieCallBack(wkeWebView webWindow, void* param)
 	{
 		GetInstance()->isLogin = true;
 		GetInstance()->strCookies = wkeGetCookie(webWindow);
+		if (GetInstance()->strCookies.empty())
+		{
+			GetInstance()->isLogin = false;
+			wkeRunJS(app.window, "showErrorMessage('退出账号后需要重新启动软件才能正常登录！请重新打开本软件');");
+			return;
+		}
 		PVOID jsondata = nullptr;
 		std::string strJsonData;
 		char szModeleName[MAX_PATH];
@@ -1040,16 +1110,23 @@ void CWkeWindow::GetLoginCookieCallBack(wkeWebView webWindow, void* param)
 		/*
 		已经登录百度让登录百度的按钮隐藏
 		*/
-		wkeRunJS(app.window, "app.tablelistisShwo = true;");
-		jsExecState es = wkeGlobalExec(app.window);
-		jsValue thisObject = jsGetGlobal(es, "app");
-		bool b = jsIsObject(thisObject);
-		jsValue func = jsGet(es, thisObject, "updateBaiduList");
-		std::string argJson = GetInstance()->m_BaiduPare.GetBaiduFileListInfo("/", GetInstance()->strCookies);
-		//argJson = Utf8_To_Gbk(argJson.c_str());
-		jsValue jsArg[1] = { jsString(es, argJson.c_str()) };
-		jsCall(es, func, thisObject, jsArg, 1);
-		wkeDestroyWebWindow(webWindow);
+		BaiduUserInfo baiduInfo;
+		ZeroMemory(&baiduInfo, sizeof(BaiduUserInfo));
+		if (GetInstance()->m_BaiduPare.GetloginBassInfo(baiduInfo, GetInstance()->strCookies))
+		{
+			std::string strData = str(boost::format("app.DiskUsed = '%1%';  app.DiskTotal = '%2%';") % baiduInfo.strDiskUsed % baiduInfo.strDisktotal);
+			wkeRunJS(app.window, strData.c_str());
+			wkeRunJS(app.window, "app.tablelistisShwo = true;");
+			jsExecState es = wkeGlobalExec(app.window);
+			jsValue thisObject = jsGetGlobal(es, "app");
+			bool b = jsIsObject(thisObject);
+			jsValue func = jsGet(es, thisObject, "updateBaiduList");
+			std::string argJson = GetInstance()->m_BaiduPare.GetBaiduFileListInfo("/", GetInstance()->strCookies);
+			//argJson = Utf8_To_Gbk(argJson.c_str());
+			jsValue jsArg[1] = { jsString(es, argJson.c_str()) };
+			jsCall(es, func, thisObject, jsArg, 1);
+			wkeDestroyWebWindow(webWindow);
+		}
 	}
 }
 wkeWebView CWkeWindow::onCreateView(wkeWebView webWindow, void* param, wkeNavigationType navType, const wkeString url, const wkeWindowFeatures* features)
@@ -1160,7 +1237,7 @@ jsValue CWkeWindow::LogOut(jsExecState es, void* param)
 		strJsonData = buffer.GetString();
 		GetInstance()->m_BaiduPare.WriteFileBuffer(szModeleName, const_cast<char*>(strJsonData.c_str()), strJsonData.length());
 	}
-	wkeRunJS(app.window, "app.tablelistisShwo = false;");
+	wkeRunJS(app.window, "app.tablelistisShwo = false;app.DiskUsed = '';  app.DiskTotal = '';");
 	GetInstance()->strCookies = "";
 	GetInstance()->isLogin = false;
 	return jsUndefined();
@@ -1492,6 +1569,71 @@ jsValue CWkeWindow::DeleteBaiduFile(jsExecState es, void* param)
 	jsValue jsArg[1] = { jsString(es, argJson.c_str()) };
 	jsCall(es, func, thisObject, jsArg, 1);
 	return jsUndefined();
+}
+
+jsValue CWkeWindow::OpenFilePlaceFolder(jsExecState es, void* param)
+{
+	jsValue bResult = jsInt(0);
+	if (!param)return jsUndefined();
+	int argCount = jsArgCount(es);
+	if (argCount < 2)
+		return bResult;
+	jsType type = jsArgType(es, 0);
+	if (JSTYPE_STRING != type)
+		return bResult;
+	type = jsArgType(es, 1);
+	if (JSTYPE_NUMBER != type)
+		return bResult;
+	jsValue arg0 = jsArg(es, 0);
+	jsValue arg1 = jsArg(es, 1);
+	std::string arg0str = jsToTempString(es, arg0);
+	int nType = jsToInt(es, arg1);
+	if (arg0str.empty())
+	{
+		return bResult;
+	}
+	arg0str = GetInstance()->m_BaiduPare.Utf8_To_Gbk(arg0str.c_str());
+	switch (nType)
+	{
+	case 1:
+	{
+		if (_access(arg0str.c_str(), 0) != -1)
+		{
+			std::string strArg = "/select,";
+			arg0str = GetInstance()->replace_all_distinct(arg0str, "/", "\\");
+			arg0str = GetInstance()->replace_all_distinct(arg0str, "\\\\", "\\");
+			strArg += arg0str;
+			ShellExecuteA(NULL, "open", "explorer", strArg.c_str(), NULL, SW_SHOW);
+			bResult = jsInt(1);
+		}
+	}
+	break;
+	case 2:
+	{
+		if (_access(arg0str.c_str(), 0) != -1)
+		{
+			arg0str = GetInstance()->replace_all_distinct(arg0str, "/", "\\");
+			arg0str = GetInstance()->replace_all_distinct(arg0str, "\\\\", "\\");
+			ShellExecuteA(NULL, "open", arg0str.c_str(), NULL, NULL, SW_SHOW);
+			bResult = jsInt(1);
+		}
+	}
+	case 3:
+	{
+		if (_access(arg0str.c_str(), 0) != -1)
+		{
+			arg0str = GetInstance()->replace_all_distinct(arg0str, "/", "\\");
+			arg0str = GetInstance()->replace_all_distinct(arg0str, "\\\\", "\\");
+			DeleteFileA(arg0str.c_str());
+			bResult = jsInt(1);
+		}
+	}
+	break;
+	break;
+	default:
+		break;
+	}
+	return bResult;
 }
 
 jsValue CWkeWindow::DownShareFile(jsExecState es, void* param)

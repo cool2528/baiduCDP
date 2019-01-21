@@ -30,6 +30,7 @@ typedef struct baiduRequestInfo
 	std::string BDCLND;
 	std::string server_filename;
 	ULONGLONG server_time;
+	UINT n_isdir;
 }BAIDUREQUESTINFO, *PBAIDUREQUESTINFO;
 /*
 正则取出内容返回
@@ -112,6 +113,8 @@ private:
 	static std::string m_vcCodeUrl;
 	//验证码
 	static std::string m_VerCode;
+	//访问密码
+	static std::string m_SharePass;
 	//验证码窗口回调
 	static INT_PTR CALLBACK ImageProc(
 		_In_ HWND   hwndDlg,
@@ -121,9 +124,18 @@ private:
 		);
 	//加载图片
 	static BOOL LodcomImage(LPVOID PmemIm, ULONG dwLen, CImage& ImgObj);
-public:
-//显示输入验证码的窗口
+	//显示输入验证码的窗口
 	void ShowInputVerCodeDlg();
+	//访问密码窗口回调
+	static INT_PTR CALLBACK ShareProc(
+		_In_ HWND   hwndDlg,
+		_In_ UINT   uMsg,
+		_In_ WPARAM wParam,
+		_In_ LPARAM lParam
+	);
+	//显示输入访问密码的窗口
+	void ShowInputPassDlg();
+public:
 /*
 获取百度网盘文件列表信息
 */
@@ -147,6 +159,10 @@ REGEXVALUE GetRegexValue(const std::string strvalue, const std::string strRegx);
 	返回解析出来的真实地址以及文件的名称
 */
 REQUESTINFO ParseBaiduAddr(const std::string strUrl, std::string& strCookies);
+/*
+判断是否是带密码分享链接
+*/
+int IsPassWordShareUrl(std::string& strUrl, std::string& strCookies);
 /*
 带验证码的请求
 */

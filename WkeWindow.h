@@ -31,6 +31,7 @@ typedef struct downFileListInfo
 	UINT nErrCode;
 	std::string strErrMessage;
 	std::string strStatus;	//当前文件的下载状态
+	std::string strPath;	//当前文件存放路径
 }DOWNFILELISTINFO;
 typedef std::vector<DOWNFILELISTINFO> ActiceDownloadList;
 /*
@@ -183,9 +184,9 @@ void GetShareFileItem(const std::string& strFileName, REQUESTINFO& Result);
  //修改重试的次数
  void addRetryCount(const std::string& strFileName);
  //根据唯一标识符从UI界面获取文件的信息
- std::string GetFileCompletedInfo(const std::string& strGid);
+ DOWNFILELISTINFO GetFileCompletedInfo(const std::string& strGid);
  //解析下载完成后的json获取文件名
- std::string GetTellStatusFileName(const std::string& strJSon);
+ DOWNFILELISTINFO GetTellStatusFileName(const std::string& strJSon);
  private:
 #if 1
 	/*wss请求相关回调开始*/
@@ -270,6 +271,8 @@ public:
 	点击了关闭的回调函数、返回 true 将销毁窗口，返回 false 什么都不做。
 	*/
 	static bool OnCloseCallBack(wkeWebView webWindow, void* param);
+	/*打开文件所在目录*/
+	static jsValue OpenFilePlaceFolder(jsExecState es, void* param);
 	/*
 	回调：窗口已销毁
 	*/
