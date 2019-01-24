@@ -313,6 +313,8 @@ std::string HttpRequest::MergeCookie(const std::string wornCookie, const std::st
 	std::string strDest;
 	strSource = wornCookie;
 	strDest = newCookie;
+	if (newCookie.empty())
+		return wornCookie;
 	if (strSource.at(strSource.length() - 1) != ';')
 		strSource += ";";
 	if (strDest.at(strDest.length() - 1) != ';')

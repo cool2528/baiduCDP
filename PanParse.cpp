@@ -36,14 +36,7 @@ DWORD CBaiduParse::WriteFileBuffer(std::string szFileNmae, PVOID pFileBuffer, DW
 				if (hFile != INVALID_HANDLE_VALUE)
 				{
 					::WriteFile(hFile, pFileBuffer, dwFileSize, &dwStates, NULL);
-					/*	CloseHandle(hFile);
-					ofstream file(szFileNmae, std::ios::out|std::ios::binary);
-					//file.open(szFileNmae,std::ios::out);
-					if (!file.is_open())
-					return dwStates;
-					file.write((char*)pFileBuffer, dwFileSize);
-					file.close();
-					dwStates = NULL;*/
+
 					::CloseHandle(hFile);
 				}
 			}
@@ -126,6 +119,137 @@ REQUESTINFO CBaiduParse::ParseBaiduAddr(const std::string strUrl, std::string& s
 	strRealUrl.strFileName = BaiduInfo.server_filename;
 	strRealUrl.strCookies = strCookies;
 	return strRealUrl;
+}
+REQUESTINFO CBaiduParse::ParseBaiduAddrEx(BAIDUREQUESTINFO& BaiduInfo, std::string& strCookies)
+{
+	HttpRequest BaiduHttp;
+	REQUESTINFO strRealUrl;
+	std::string strDownloadUrl;
+	std::string strJson;
+	BaiduInfo.app_id = BaiduInfo.app_id.empty() ? "250528" : BaiduInfo.app_id;
+	strDownloadUrl = "https://pan.baidu.com/api/sharedownload?sign=" + BaiduInfo.sign + \
+		"&timestamp=" + BaiduInfo.timestamp + "&channel=chunlei&web=1&app_id=" + BaiduInfo.app_id + \
+		"&bdstoken=" + BaiduInfo.bdstoken + "&logid=" + GetLogid() + "&clienttype=0";
+	BaiduInfo.BDCLND = GetTextMid(strCookies, "BDCLND=", ";");
+	if (BaiduInfo.BDCLND.empty())
+	{
+		strJson = "encrypt=0&product=share&uk=%1%&primaryid=%2%&fid_list=%%5B%3%%%5D&path_list=";
+		strJson = str(boost::format(strJson) % BaiduInfo.uk % BaiduInfo.shareid % BaiduInfo.fs_id);
+	}
+	else
+	{
+		strJson = "encrypt=0&extra=%%7B%%22sekey%%22%%3A%%22%1%%%22%%7D&product=share&uk=%2%&primaryid=%3%&fid_list=%%5B%4%%%5D&path_list=";
+		strJson = str(boost::format(strJson) % BaiduInfo.BDCLND % BaiduInfo.uk % BaiduInfo.shareid % BaiduInfo.fs_id);
+	}
+	/*准备提交数据获取真实URL地址*/
+	BaiduHttp.SetRequestHeader("Content-Type", " application/x-www-form-urlencoded; charset=UTF-8");
+	BaiduHttp.SetRequestHeader("Accept", " application/json, text/javascript, */*; q=0.01");
+	BaiduHttp.SetRequestCookies(strCookies);
+	BaiduHttp.Send(POST, strDownloadUrl, strJson);
+	strJson = BaiduHttp.GetResponseText();
+	rapidjson::Document dc;
+	dc.Parse(strJson.c_str());
+	if (!dc.IsObject())
+		return strRealUrl;
+	int nError = -1;
+	if (dc.HasMember("errno") && dc["errno"].IsInt())
+		nError = dc["errno"].GetInt();
+	if (!nError)
+	{
+		if (dc.HasMember("list") && dc["list"].IsArray())
+		{
+			for (auto &v : dc["list"].GetArray())
+			{
+				if (v.HasMember("dlink") && v["dlink"].IsString())
+					strRealUrl.strDownloadUrl = v["dlink"].GetString();
+			}
+		}
+	}
+	else
+	{
+		//这里需要输入验证码了
+		int index = 0;
+		do
+		{
+			if (index>5)
+				break;
+			strRealUrl.strDownloadUrl = GetBaiduAddr(BaiduInfo, strCookies);
+			index++;
+		} while (strRealUrl.strDownloadUrl.empty());
+	}
+	// 	BaiduHttp.Send(HEAD, strRealUrl.strDownloadUrl);
+	// 	strRealUrl.strDownloadUrl = GetTextMid(BaiduHttp.GetallResponseHeaders(), "Location: ", "\r\n");
+	strRealUrl.strFileName = BaiduInfo.server_filename;
+	strRealUrl.strCookies = strCookies;
+	return strRealUrl;
+}
+std::string CBaiduParse::AnalysisShareUrlInfo(const std::string strUrl, std::string& strCookie)
+{
+	std::string strWebUrl = strUrl;
+	std::string strResultJson;
+	int nResult = IsPassWordShareUrl(strWebUrl, strCookie);
+	HttpRequest BaiduHttp;
+	BAIDUREQUESTINFO BaiduInfo;
+	ZeroMemory(&BaiduInfo, sizeof(BAIDUREQUESTINFO));
+	REQUESTINFO strRealUrl;
+	std::string strDownloadUrl;
+	std::string strResponseText;
+	BaiduHttp.SetRequestCookies(strCookie);
+	BaiduHttp.SetHttpRedirect(true);
+	BaiduHttp.Send(GET, strUrl);
+	strResponseText = BaiduHttp.GetResponseText();
+	strResponseText = Utf8_To_Gbk(strResponseText.c_str());
+	if (strResponseText.empty())
+		return strResultJson;
+	std::string strJson = GetTextMid(strResponseText, "yunData.setData(", ");");
+	BaiduInfo = GetBaiduInfo(strJson);
+// 	if (BaiduInfo.n_isdir)
+// 	{
+// 		strResultJson = GetBaiduShareFileListInfo(Utf8_To_Gbk(BaiduInfo.strPath.c_str()), strCookie, BaiduInfo);
+// 	}
+// 	else
+// 	{
+		rapidjson::Document docjson;
+		docjson.SetObject();
+		rapidjson::Value array_list(rapidjson::kArrayType);
+		rapidjson::Value itemObject(rapidjson::kObjectType);
+		rapidjson::Value isdir(rapidjson::kNumberType);
+		isdir.SetInt(BaiduInfo.n_isdir);
+		itemObject.AddMember(rapidjson::StringRef("isdir"), isdir, docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("cookie"), rapidjson::StringRef(strCookie.c_str()), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("name"), rapidjson::StringRef(BaiduInfo.server_filename.c_str()), docjson.GetAllocator());
+		std::string strFilesize = BaiduInfo.server_filename.empty() ? "--" : GetFileSizeType(BaiduInfo.nSize);
+		rapidjson::Value FileSize(rapidjson::kStringType);
+		FileSize.SetString(strFilesize.c_str(), strFilesize.length(), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("Size"), FileSize, docjson.GetAllocator());
+		rapidjson::Value nCategory(rapidjson::kNumberType);
+		nCategory.SetInt(BaiduInfo.ncategory);
+		itemObject.AddMember(rapidjson::StringRef("nCategory"), nCategory, docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("path"), rapidjson::StringRef(BaiduInfo.strPath.c_str()), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("FileType"), rapidjson::StringRef(::PathFindExtensionA(Utf8_To_Gbk(BaiduInfo.server_filename.c_str()).c_str())), docjson.GetAllocator());
+		std::string strTime = BaiduInfo.server_filename.empty() ? "-" :timestampToDate(BaiduInfo.server_time);
+		rapidjson::Value FileTime(rapidjson::kStringType);
+		FileTime.SetString(strTime.c_str(), strTime.length(), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("ChangeTime"), FileTime, docjson.GetAllocator());
+		rapidjson::Value fs_id(rapidjson::kStringType);
+		fs_id.SetString(BaiduInfo.fs_id.c_str(), BaiduInfo.fs_id.length(), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("fs_id"), fs_id, docjson.GetAllocator());
+		array_list.PushBack(itemObject, docjson.GetAllocator());
+		rapidjson::Value info(rapidjson::kObjectType);
+		info.AddMember(rapidjson::StringRef("uk"), rapidjson::StringRef(BaiduInfo.uk.c_str()), docjson.GetAllocator());
+		info.AddMember(rapidjson::StringRef("bdstoken"), rapidjson::StringRef(BaiduInfo.bdstoken.c_str()), docjson.GetAllocator());
+		info.AddMember(rapidjson::StringRef("sign"), rapidjson::StringRef(BaiduInfo.sign.c_str()), docjson.GetAllocator());
+		info.AddMember(rapidjson::StringRef("shareid"), rapidjson::StringRef(BaiduInfo.shareid.c_str()), docjson.GetAllocator());
+		info.AddMember(rapidjson::StringRef("timestamp"), rapidjson::StringRef(BaiduInfo.timestamp.c_str()), docjson.GetAllocator());
+		docjson.AddMember(rapidjson::StringRef("info"), info, docjson.GetAllocator());
+		docjson.AddMember(rapidjson::StringRef("data"), array_list, docjson.GetAllocator());
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		docjson.Accept(writer);
+		strResultJson = buffer.GetString();
+		//WriteFileBuffer(".\\1.txt", (PVOID)strResultJson.c_str(), strResultJson.length());
+	//}
+	return strResultJson;
 }
 
 int CBaiduParse::IsPassWordShareUrl(std::string& strUrl, std::string& strCookies)
@@ -306,18 +430,31 @@ BAIDUREQUESTINFO CBaiduParse::GetBaiduInfo(const std::string strJson)
 				{
 					baiduInfo.server_filename = v["server_filename"].GetString();
 				}
+				if (v.HasMember("path") && v["path"].IsString())
+				{
+					baiduInfo.strPath = v["path"].GetString();
+				}
 				if (v.HasMember("isdir") && v["isdir"].IsUint())
 				{
 					baiduInfo.n_isdir = v["isdir"].GetUint();
+				}
+				if (v.HasMember("category") && v["category"].IsUint())
+				{
+					baiduInfo.ncategory = v["category"].GetUint();
 				}
 				if (v.HasMember("server_ctime") && v["server_ctime"].IsUint64())
 				{
 					baiduInfo.server_time = v["server_ctime"].GetUint64();
 				}
+				if (v.HasMember("size") && v["size"].IsUint64())
+				{
+					baiduInfo.nSize = v["size"].GetUint64();
+				}
 				if (v.HasMember("fs_id") && v["fs_id"].IsUint64())
 				{
 					baiduInfo.fs_id = std::to_string(v["fs_id"].GetUint64());
 				}
+				
 			}
 		}
 	}
@@ -682,6 +819,96 @@ std::string CBaiduParse::GetBaiduFileListInfo(const std::string& path, const std
 	return strResultJson;
 }
 
+std::string CBaiduParse::GetBaiduShareFileListInfo(const std::string& path, const std::string strCookie, BAIDUREQUESTINFO userinfo)
+{
+	std::string strResultJson;
+	FileTypeArray fileInfoResult;
+	std::string strFileUrl, strResult;
+	ZeroMemory(&fileInfoResult, sizeof(fileInfoResult));
+	if (strCookie.empty() || path.empty())
+		return strResultJson;
+	strFileUrl = str(boost::format(SHARE_FILE_LIST_URL) %userinfo.uk % userinfo.shareid % URL_Coding(path.c_str()).c_str() % userinfo.bdstoken % GetLogid());
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetRequestCookies(strCookie);
+	BaiduHttp.Send(GET, strFileUrl);
+	strResult = BaiduHttp.GetResponseText();
+	rapidjson::Document dc;
+	dc.Parse(strResult.c_str());
+	if (!dc.IsObject())
+		return strResultJson;
+	if (dc.HasMember("list") && dc["list"].IsArray())
+	{
+		for (auto&v : dc["list"].GetArray())
+		{
+			if (v.IsObject())
+			{
+				BaiduFileInfo item;
+				if (v.HasMember("category") && v["category"].IsInt())
+					item.nCategory = v["category"].GetInt();
+				if (v.HasMember("isdir") && v["isdir"].IsInt())
+					item.nisdir = v["isdir"].GetInt();
+				if (v.HasMember("path") && v["path"].IsString())
+					item.strPath = v["path"].GetString();
+				if (v.HasMember("server_filename") && v["server_filename"].IsString())
+					item.server_filename = v["server_filename"].GetString();
+				if (v.HasMember("size") && v["size"].IsUint())
+					item.size = v["size"].GetUint();
+				if (v.HasMember("server_ctime") && v["server_ctime"].IsUint())
+					item.server_ctime = v["server_ctime"].GetUint();
+				if (v.HasMember("fs_id") && v["fs_id"].IsUint64())
+					item.fs_id = std::to_string(v["fs_id"].GetUint64());
+				if (!item.nisdir)
+					item.strFileType = ::PathFindExtensionA(Utf8_To_Gbk(item.server_filename.c_str()).c_str());
+				fileInfoResult.push_back(item);
+			}
+		}
+	}
+	rapidjson::Document docjson;
+	docjson.SetObject();
+	rapidjson::Value array_list(rapidjson::kArrayType);
+	for (size_t i = 0; i < fileInfoResult.size(); i++)
+	{
+		rapidjson::Value itemObject(rapidjson::kObjectType);
+		rapidjson::Value isdir(rapidjson::kNumberType);
+		isdir.SetInt(fileInfoResult[i].nisdir);
+		itemObject.AddMember(rapidjson::StringRef("isdir"), isdir, docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("cookie"), rapidjson::StringRef(strCookie.c_str()), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("name"), rapidjson::StringRef(fileInfoResult[i].server_filename.c_str()), docjson.GetAllocator());
+		std::string strFilesize = GetFileSizeType(fileInfoResult[i].size);
+		rapidjson::Value FileSize(rapidjson::kStringType);
+		FileSize.SetString(strFilesize.c_str(), strFilesize.length(), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("Size"), FileSize, docjson.GetAllocator());
+		rapidjson::Value nCategory(rapidjson::kNumberType);
+		nCategory.SetInt(fileInfoResult[i].nCategory);
+		itemObject.AddMember(rapidjson::StringRef("nCategory"), nCategory, docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("path"), rapidjson::StringRef(fileInfoResult[i].strPath.c_str()), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("FileType"), rapidjson::StringRef(fileInfoResult[i].strFileType.c_str()), docjson.GetAllocator());
+		std::string strTime = timestampToDate(fileInfoResult[i].server_ctime);
+		rapidjson::Value FileTime(rapidjson::kStringType);
+		FileTime.SetString(strTime.c_str(), strTime.length(), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("ChangeTime"), FileTime, docjson.GetAllocator());
+		rapidjson::Value fs_id(rapidjson::kStringType);
+		fs_id.SetString(fileInfoResult[i].fs_id.c_str(), fileInfoResult[i].fs_id.length(), docjson.GetAllocator());
+		itemObject.AddMember(rapidjson::StringRef("fs_id"), fs_id, docjson.GetAllocator());
+		array_list.PushBack(itemObject, docjson.GetAllocator());
+
+	}
+	rapidjson::Value info(rapidjson::kObjectType);
+	info.AddMember(rapidjson::StringRef("uk"), rapidjson::StringRef(userinfo.uk.c_str()), docjson.GetAllocator());
+	info.AddMember(rapidjson::StringRef("bdstoken"), rapidjson::StringRef(userinfo.bdstoken.c_str()), docjson.GetAllocator());
+	info.AddMember(rapidjson::StringRef("sign"), rapidjson::StringRef(userinfo.sign.c_str()), docjson.GetAllocator());
+	info.AddMember(rapidjson::StringRef("shareid"), rapidjson::StringRef(userinfo.shareid.c_str()), docjson.GetAllocator());
+	info.AddMember(rapidjson::StringRef("timestamp"), rapidjson::StringRef(userinfo.timestamp.c_str()), docjson.GetAllocator());
+	docjson.AddMember(rapidjson::StringRef("info"), info, docjson.GetAllocator());
+	docjson.AddMember(rapidjson::StringRef("data"), array_list, docjson.GetAllocator());
+	rapidjson::StringBuffer buffer;
+	rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+	docjson.Accept(writer);
+	strResultJson = buffer.GetString();
+	//WriteFileBuffer(".\\1.txt",(PVOID)strResultJson.c_str(), strResultJson.length());
+	return strResultJson;
+}
+
 std::string CBaiduParse::URL_Coding(const char* szSource, bool isletter /*= true*/, bool isUtf8 /*= true*/)
 {
 	CHAR szTemp[20];
@@ -831,9 +1058,9 @@ std::string CBaiduParse::timestampToDate(ULONGLONG ctime)
 	struct tm time;
 	time_t tick = (time_t)ctime;
 	::localtime_s(&time, &tick);
-	char sztime[100];
-	ZeroMemory(sztime, 100);
-	::strftime(sztime, 100, "%Y-%m-%d", &time);
+	char sztime[256];
+	ZeroMemory(sztime, 256);
+	::strftime(sztime, 256, "%Y-%m-%d", &time);
 	return std::string(sztime);
 }
 

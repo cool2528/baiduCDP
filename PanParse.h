@@ -17,6 +17,7 @@
 #define SHARE_FILE_URL_2 "https://pan.baidu.com/share/pset?channel=chunlei&clienttype=0&web=1&channel=chunlei&web=1&app_id=250528&bdstoken=%1%&logid=%2%&clienttype=0"
 #define DISK_CAPACITY_QUERY "https://pan.baidu.com/api/quota?app_id=250528&bdstoken=%1%&channel=chunlei&checkexpire=1&checkfree=1&clienttype=0&web=1"
 #define NETDISK_USER_AGENT "netdisk;6.0.0.12;PC;PC-Windows;10.0.16299;WindowsBaiduYunGuanJia"
+#define SHARE_FILE_LIST_URL "https://pan.baidu.com/share/list?uk=%1%&shareid=%2%&order=other&desc=1&showempty=0&web=1&page=1&num=100&dir=%3%&t=0.46885612477703087&channel=chunlei&web=1&app_id=250528&bdstoken=%4%&logid=%5%&clienttype=0"
 extern HINSTANCE g_hInstance;
 typedef struct baiduRequestInfo
 {
@@ -31,6 +32,9 @@ typedef struct baiduRequestInfo
 	std::string server_filename;
 	ULONGLONG server_time;
 	UINT n_isdir;
+	std::string strPath;
+	UINT ncategory;
+	ULONGLONG nSize;
 }BAIDUREQUESTINFO, *PBAIDUREQUESTINFO;
 /*
 正则取出内容返回
@@ -140,6 +144,8 @@ public:
 获取百度网盘文件列表信息
 */
 std::string GetBaiduFileListInfo(const std::string& path, const std::string strCookie);
+/*获取百度网盘分享文件列表信息*/
+std::string GetBaiduShareFileListInfo(const std::string& path, const std::string strCookie, BAIDUREQUESTINFO userinfo);
 /*
 写文件
 */
@@ -159,6 +165,17 @@ REGEXVALUE GetRegexValue(const std::string strvalue, const std::string strRegx);
 	返回解析出来的真实地址以及文件的名称
 */
 REQUESTINFO ParseBaiduAddr(const std::string strUrl, std::string& strCookies);
+/*
+解析百度盘真实下载地址
+strUrl 请求的网址
+strCookies 登录后的cookies
+返回解析出来的真实地址以及文件的名称
+*/
+REQUESTINFO ParseBaiduAddrEx(BAIDUREQUESTINFO& BaiduInfo, std::string& strCookies);
+/*
+分析用户提供的分享下载链接的文件信息生成json数据回传给UI界面渲染
+*/
+std::string AnalysisShareUrlInfo(const std::string strUrl,std::string& strCookie);
 /*
 判断是否是带密码分享链接
 */

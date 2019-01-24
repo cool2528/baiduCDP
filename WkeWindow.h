@@ -73,6 +73,7 @@ typedef struct retryCount
 #define ARIA2_UPDATE_TELLERROR_LIST_MSG WM_USER +0x108
 #define ARIA2_PURGEDOWNLOAD_MSG WM_USER +0x109
 #define ARIA2_RETRYADDURL_MSG WM_USER +0x110
+#define UI_DOWNLOAD_SHARE_UPDATE_LIST WM_USER + 0x111
 /*
 自定义消息结束
 */
@@ -273,6 +274,8 @@ public:
 	static bool OnCloseCallBack(wkeWebView webWindow, void* param);
 	/*打开文件所在目录*/
 	static jsValue OpenFilePlaceFolder(jsExecState es, void* param);
+	/*切换分享链接下载目录*/
+	static jsValue switchShareFolder(jsExecState es, void* param);
 	/*
 	回调：窗口已销毁
 	*/
@@ -297,6 +300,8 @@ public:
 	static jsValue DownloadUserFile(jsExecState es, void* param);
 	/*下载分享链接*/
 	static jsValue DownShareFile(jsExecState es, void* param);
+	/*下载用户选择的分享连接*/
+	static jsValue DownSelectShareFile(jsExecState es, void* param);
 	/*判断下载分享的链接是什么下载类型
 	 1、百度网盘 2、蓝奏网盘 3、城通网盘 0 是无知类型下载地址
 	 */
@@ -309,6 +314,8 @@ public:
 	std::string& replace_all_distinct(std::string& str, const std::string& old_value, const std::string& new_value);
 	// 下载百度网盘内的文件
 	bool DownloadUserLocalFile(const std::string& strJsonData);
+	//解析UI界面传递来的下载文件json 投递给aria2下载
+	void DownloadUiShareFile(const std::string & strJson);
 	/* 回调：创建新的页面，比如说调用了 window.open 或者点击了 <a target="_blank" .../>*/
    static wkeWebView onCreateView(wkeWebView webWindow, void* param, wkeNavigationType navType, const wkeString url, const wkeWindowFeatures* features);
    /*更新正在下载的列表数据到UI界面*/

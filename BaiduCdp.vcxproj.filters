@@ -16,6 +16,9 @@
     <Filter Include="BaiduParse">
       <UniqueIdentifier>{e8fec2f2-1e54-4228-a65b-4d83b388d88d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="加密解密">
+      <UniqueIdentifier>{863f99f3-e272-4cc0-bfd3-30efbca9c4af}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -32,6 +35,9 @@
     </ClCompile>
     <ClCompile Include="shadow_window.cpp">
       <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CEncryption.cpp">
+      <Filter>加密解密</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -59,10 +65,18 @@
     <ClInclude Include="shadow_window.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="CEncryption.h">
+      <Filter>加密解密</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="BaiduCdp.rc">
       <Filter>资源文件</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Debug\icon.ico">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
 </Project>

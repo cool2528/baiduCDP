@@ -12,12 +12,11 @@
  *
  * @author baidu aip
  */
-#ifndef __AIP_BASE64_H__
-#define __AIP_BASE64_H__
+#ifndef __AIP_BASE64_HS_
+#define __AIP_BASE64_HS_
 
 #include <iostream>
 #include <string>
-
 namespace aip {
     
     static const std::string base64_chars =
