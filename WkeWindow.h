@@ -74,6 +74,9 @@ typedef struct retryCount
 #define ARIA2_PURGEDOWNLOAD_MSG WM_USER +0x109
 #define ARIA2_RETRYADDURL_MSG WM_USER +0x110
 #define UI_DOWNLOAD_SHARE_UPDATE_LIST WM_USER + 0x111
+#define UI_UPDATE_FOLODER_LIST_MSG WM_USER + 0x112
+#define UI_UPDATE_OFF_LINE_LIST_MSG WM_USER + 0x113
+#define UI_UPDATE_USER_FILE_DATA_MSG WM_USER +0x114
 /*
 自定义消息结束
 */
@@ -100,13 +103,12 @@ typedef struct retryCount
 #define ARIA2_HTTP_REQUESTURL "http://127.0.0.1:6800/jsonrpc"
 //用定时器更新发送查询数据
 #define UPDTAE_UI_TIMEID 508
-//
-typedef BOOL(WINAPI *pfnUpdateLayeredWindow)(HWND hWnd, HDC hdcDst, POINT *pptDst,
-	SIZE *psize, HDC hdcSrc, POINT *pptSrc, COLORREF crKey,
-	BLENDFUNCTION *pblend, DWORD dwFlags);
-typedef HRESULT(WINAPI *pfnDwmIsCompositionEnabled)(BOOL *pfEnabled);
-typedef void(__stdcall *pfnAdjustShadows)(void * pCallbackData, LPBITMAPINFO pBmpinfo, UINT32 *pShadBits, long lxShadowSize, long lcxOffset, long lcyOffset);
 
+typedef struct DownloadSpeedinfo
+{
+	std::string strUnit;	//单位
+	float dwSize;
+}DOWNLOADSPEEDINFO;
 enum ShadowStatus
 {
 	SS_ENABLED = 1,
@@ -167,7 +169,7 @@ private:
  //下载文件保存的路径
  std::string m_downloadSavePath;
  //获取文件大小类型
- inline std::string GetFileSizeType(double dSize);
+ inline DOWNLOADSPEEDINFO GetFileSizeType(double dSize);
  //取百分比
  inline double Getpercentage(double completedLength, double totalLength);
  //下载失败重试次数的数组
@@ -251,6 +253,10 @@ public:
 	退出当前账号
 	*/
 	static jsValue LogOut(jsExecState es, void* param);
+	/*枚举用户当前账户所有文件夹*/
+	static jsValue EnumFolder(jsExecState es, void* param);
+	/*获取当前离线下载的列表或者添加离线下载任务*/
+	static jsValue OffLineDownload (jsExecState es, void* param);
 	/*
 	验证是否已经有效的登录了百度网盘
 	*/
@@ -263,7 +269,8 @@ public:
 	分享文件回调函数
 	*/
 	static jsValue ShareBaiduFile(jsExecState es, void* param);
-
+	/*重命名百度用户文件*/
+	static jsValue BaiduFileRename(jsExecState es, void* param);
 	/*
 	删除文件或者文件夹
 	*/

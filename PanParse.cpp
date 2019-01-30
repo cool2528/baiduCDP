@@ -8,6 +8,7 @@
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
+#include "rapidjson/pointer.h"
 #include "resource.h"
 #pragma comment(lib,"dbghelp.lib")
 #pragma comment(lib,"shlwapi.lib")
@@ -315,6 +316,192 @@ int CBaiduParse::IsPassWordShareUrl(std::string& strUrl, std::string& strCookies
 		nResult = 0;
 	}
 	return nResult;
+}
+
+std::string CBaiduParse::AddOfflineDownload(const std::string& strUrl,const std::string& strSavePath, const std::string& strCookie)
+{
+	std::string  bResult;
+	if (strUrl.empty() || strCookie.empty() || strSavePath.empty())
+		return bResult;
+	BaiduUserInfo userinfo;
+	if (!GetloginBassInfo(userinfo, strCookie))
+		return bResult;
+	std::string strOffLineUrl = str(boost::format(OFF_LINE_DOWNLOAD_URL) % userinfo.bdstoken % URL_Coding(strSavePath.c_str()) % URL_Coding(strUrl.c_str()));
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetRequestCookies(strCookie);
+	BaiduHttp.Send(GET, strOffLineUrl);
+	std::string strTextData = BaiduHttp.GetResponseText();
+	rapidjson::Document dc;
+	dc.Parse(strTextData.c_str());
+	if (!dc.IsObject())
+		return bResult;
+	if (dc.HasMember("task_id") && dc["task_id"].IsUint64())
+	{
+		ULONGLONG nUtask_id = dc["task_id"].GetUint64();
+		bResult = std::to_string(nUtask_id);
+	}
+	return bResult;
+}
+
+REGEXVALUE CBaiduParse::QueryOffLineList(const std::string& strCookie)
+{
+	REGEXVALUE strResult;
+	ZeroMemory(&strResult, sizeof(REGEXVALUE));
+	if (strCookie.empty())
+		return strResult;
+	BaiduUserInfo userinfo;
+	if (!GetloginBassInfo(userinfo, strCookie))
+		return strResult;
+	std::string strQueryUrl = str(boost::format(OFF_LINE_QUERY_ALL_URL) % userinfo.bdstoken);
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetRequestCookies(strCookie);
+	BaiduHttp.Send(GET, strQueryUrl);
+	std::string strTextData = BaiduHttp.GetResponseText();
+	rapidjson::Document dc;
+	dc.Parse(strTextData.c_str());
+	if (!dc.IsObject())
+		return strResult;
+	if (dc.HasMember("task_info") && dc["task_info"].IsArray())
+	{
+		for (auto& v: dc["task_info"].GetArray())
+		{
+			if (v.HasMember("task_id") && v["task_id"].IsString())
+			{
+				strResult.push_back(std::string(v["task_id"].GetString()));
+			}
+		}
+	}
+	return strResult;
+}
+
+std::string CBaiduParse::QueryTaskIdListStatus(const REGEXVALUE& TaskIdList, const std::string& strCookie)
+{
+	std::string strResult,strTaskIdList;
+	if (TaskIdList.empty() || strCookie.empty())
+		return strResult;
+	BaiduUserInfo userinfo;
+	if (!GetloginBassInfo(userinfo, strCookie))
+		return strResult;
+	if (TaskIdList.size()==1)
+	{
+		strTaskIdList = TaskIdList.at(0);
+	}
+	else
+	{
+		for (size_t i =0;i<TaskIdList.size();i++)
+		{
+			if (i < TaskIdList.size()-1)
+			{
+				strTaskIdList += TaskIdList.at(i) + ",";
+			}
+			else
+			{
+				strTaskIdList += TaskIdList.at(i);
+			}
+		}
+	}
+	std::string strQueryUrl = str(boost::format(QUERY_LIST_TASKIDS_URL) % userinfo.bdstoken % URL_Coding(strTaskIdList.c_str()));
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetRequestCookies(strCookie);
+	BaiduHttp.Send(GET, strQueryUrl);
+	std::string strTextData = BaiduHttp.GetResponseText();
+	rapidjson::Document dc,datajson;
+	dc.Parse(strTextData.c_str());
+	if (!dc.IsObject())
+		return strResult;
+	datajson.SetObject();
+	if (dc.HasMember("task_info") && dc["task_info"].IsObject())
+	{
+		rapidjson::Value task_info = dc["task_info"].GetObjectW();
+		rapidjson::Value arraylist(rapidjson::kArrayType);
+		for (size_t i =0;i < TaskIdList.size();i++)
+		{
+			rapidjson::Value addItem(rapidjson::kObjectType);
+			if (task_info.HasMember(TaskIdList[i].c_str()) && task_info[TaskIdList[i].c_str()].IsObject())
+			{
+				rapidjson::Value itemObj = task_info[TaskIdList[i].c_str()].GetObjectW();
+				int nStatus = 0;
+				std::string strFileSize;
+				std::string strtask_name, strProgress;
+				ULONGLONG uLfinished_size=0,uLFileSize=0;
+				if (itemObj.HasMember("status") && itemObj["status"].IsString())
+					nStatus = atoi(itemObj["status"].GetString());
+				if (itemObj.HasMember("file_size") && itemObj["file_size"].IsString())
+				{
+					uLFileSize = _atoi64(itemObj["file_size"].GetString());
+					strFileSize = GetFileSizeType(uLFileSize);
+				}
+				if (itemObj.HasMember("task_name") && itemObj["task_name"].IsString())
+					strtask_name = itemObj["task_name"].GetString();
+				if (itemObj.HasMember("finished_size") && itemObj["finished_size"].IsString())
+				{
+					uLfinished_size = _atoi64(itemObj["finished_size"].GetString());;
+				}
+				if (uLFileSize)
+				{
+					int && t_result = ((double)uLfinished_size / (double)uLFileSize) * 100;
+					strProgress = std::to_string(t_result) + "%";
+				}
+				rapidjson::Value status(rapidjson::kNumberType);
+				rapidjson::Value FileSize(rapidjson::kStringType);
+				rapidjson::Value FileName(rapidjson::kStringType);
+				rapidjson::Value TaskID(rapidjson::kStringType);
+				rapidjson::Value progress(rapidjson::kStringType);
+				status.SetInt(nStatus);
+				progress.SetString(strProgress.c_str(), strProgress.length(), datajson.GetAllocator());
+				FileSize.SetString(strFileSize.c_str(), strFileSize.length(), datajson.GetAllocator());
+				FileName.SetString(strtask_name.c_str(), strtask_name.length(), datajson.GetAllocator());
+				TaskID.SetString(TaskIdList[i].c_str(), TaskIdList[i].length(), datajson.GetAllocator());
+				addItem.AddMember(rapidjson::StringRef("progress"), progress, datajson.GetAllocator());
+				addItem.AddMember(rapidjson::StringRef("task_id"), TaskID, datajson.GetAllocator());
+				addItem.AddMember(rapidjson::StringRef("status"), status, datajson.GetAllocator());
+				addItem.AddMember(rapidjson::StringRef("Size"), FileSize, datajson.GetAllocator());
+				addItem.AddMember(rapidjson::StringRef("name"), FileName, datajson.GetAllocator());
+
+				arraylist.PushBack(addItem, datajson.GetAllocator());
+			}
+		}
+		datajson.AddMember(rapidjson::StringRef("data"), arraylist, datajson.GetAllocator());
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		datajson.Accept(writer);
+		strResult = buffer.GetString();
+	}
+	return strResult;
+}
+
+std::string CBaiduParse::DeleteOffLineTask(const REGEXVALUE& TaskIdList, const std::string& strCookie)
+{
+	std::string strResult, strTaskIdList;
+	if (TaskIdList.empty() || strCookie.empty())
+		return strResult;
+	BaiduUserInfo userinfo;
+	if (!GetloginBassInfo(userinfo, strCookie))
+		return strResult;
+	if (TaskIdList.size() == 1)
+	{
+		strTaskIdList = TaskIdList.at(0);
+	}
+	else
+	{
+		for (size_t i = 0; i < TaskIdList.size(); i++)
+		{
+			if (i < TaskIdList.size() - 1)
+			{
+				strTaskIdList += TaskIdList.at(i) + ",";
+			}
+			else
+			{
+				strTaskIdList += TaskIdList.at(i);
+			}
+		}
+	}
+	std::string strQueryUrl = str(boost::format(OFF_LINE_DELETE_TASKID_URL) % userinfo.bdstoken % URL_Coding(strTaskIdList.c_str()));
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetRequestCookies(strCookie);
+	BaiduHttp.Send(GET, strQueryUrl);
+	std::string strTextData = BaiduHttp.GetResponseText();
+	return strResult;
 }
 
 std::string CBaiduParse::GetBaiduAddr(BAIDUREQUESTINFO baiduinfo, const std::string strCookies)
@@ -819,6 +1006,61 @@ std::string CBaiduParse::GetBaiduFileListInfo(const std::string& path, const std
 	return strResultJson;
 }
 
+bool CBaiduParse::EnumAllFolder(const std::string& path, const std::string strCookie, rapidjson::Document& datajson)
+{
+	bool strResultJson = false;
+	FileTypeArray fileInfoResult;
+	std::string strFileUrl, strResult;
+	ZeroMemory(&fileInfoResult, sizeof(fileInfoResult));
+	if (strCookie.empty() || path.empty())
+		return strResultJson;
+	BaiduUserInfo userinfo;
+	if (!GetloginBassInfo(userinfo, strCookie))
+		return strResultJson;
+	strFileUrl = str(boost::format(FILE_LIST_URL) % URL_Coding(path.c_str()).c_str() % userinfo.bdstoken % GetLogid() % std::to_string(getTimeStamp()));
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetRequestCookies(strCookie);
+	BaiduHttp.Send(GET, strFileUrl);
+	strResult = BaiduHttp.GetResponseText();
+	rapidjson::Document dc;
+	dc.Parse(strResult.c_str());
+	if (!dc.IsObject())
+		return strResultJson;
+	if (dc.HasMember("list") && dc["list"].IsArray())
+	{
+		for (size_t i = 0; i < dc["list"].GetArray().Size(); i++)
+		{
+			rapidjson::Value& v = dc["list"][i];
+			if (v.IsObject())
+			{
+				BaiduFileInfo item;
+				if (v.HasMember("isdir") && v["isdir"].IsInt())
+					item.nisdir = v["isdir"].GetInt();
+				if (v.HasMember("path") && v["path"].IsString())
+					item.strPath = Utf8_To_Gbk(v["path"].GetString());
+				if (v.HasMember("server_filename") && v["server_filename"].IsString())
+					item.server_filename = Utf8_To_Gbk(v["server_filename"].GetString());
+				if (item.nisdir)
+				{
+
+					std::string strPath = str(boost::format(path + "data/%1%") % i);
+					rapidjson::Value strval(rapidjson::kObjectType);
+					rapidjson::Value path(rapidjson::kStringType);
+					rapidjson::Value name(rapidjson::kStringType);
+					path.SetString(item.strPath.c_str(), item.strPath.length(), datajson.GetAllocator());
+					name.SetString(item.server_filename.c_str(), item.server_filename.length(), datajson.GetAllocator());
+					strval.AddMember(rapidjson::StringRef("path"), path, datajson.GetAllocator());
+					strval.AddMember(rapidjson::StringRef("label"), name, datajson.GetAllocator());
+					rapidjson::Pointer(rapidjson::StringRef(strPath.c_str())).Set(datajson, strval);
+					EnumAllFolder(item.strPath + "/", strCookie, datajson);
+					strResultJson = true;
+				}
+			}
+		}
+	}
+	return strResultJson;
+}
+
 std::string CBaiduParse::GetBaiduShareFileListInfo(const std::string& path, const std::string strCookie, BAIDUREQUESTINFO userinfo)
 {
 	std::string strResultJson;
@@ -1036,19 +1278,19 @@ std::string CBaiduParse::GetFileSizeType(double dSize)
 	std::string szFileSize;
 	if (dSize <1024)
 	{
-		szFileSize = str(boost::format("%.2f B") %roundEx(dSize));
+		szFileSize = str(boost::format("%.1f B") %roundEx(dSize));
 	}
 	else if (dSize >1024 && dSize < 1024 * 1024 * 1024 && dSize <1024 * 1024)
 	{
-		szFileSize = str(boost::format("%.2f KB") %roundEx(dSize / 1024));
+		szFileSize = str(boost::format("%.1f KB") %roundEx(dSize / 1024));
 	}
 	else if (dSize >1024 * 1024 && dSize <1024 * 1024 * 1024)
 	{
-		szFileSize = str(boost::format("%.2f MB") %roundEx(dSize / 1024 / 1024));
+		szFileSize = str(boost::format("%.1f MB") %roundEx(dSize / 1024 / 1024));
 	}
 	else if (dSize >1024 * 1024 * 1024)
 	{
-		szFileSize = str(boost::format("%.2f GB") %roundEx(dSize / 1024 / 1024 / 1024));
+		szFileSize = str(boost::format("%.1f GB") %roundEx(dSize / 1024 / 1024 / 1024));
 	}
 	return szFileSize;
 }
@@ -1212,6 +1454,49 @@ std::string CBaiduParse::DeleteBaiduFile(const std::string strJsonData, const st
 	return bResult;
 }
 
+
+std::string CBaiduParse::BaiduRename(const std::string& strPath, const std::string& strNewName, const std::string strCookie)
+{
+	std::string strResult;
+	std::string T_strCookie = strCookie;
+	if (strPath.empty() || strNewName.empty() || strCookie.empty())
+		return strResult;
+	std::string strSend = "%%5B%%7B%%22path%%22%%3A%%22%1%%%22%%2C%%22newname%%22%%3A%%22%2%%%22%%7D%%5D";
+	strSend = str(boost::format(strSend) % URL_Coding(strPath.c_str()) % URL_Coding(strNewName.c_str()));
+	//filelist=
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetRequestCookies(T_strCookie);
+	BaiduUserInfo userinfo;
+	if (!GetloginBassInfo(userinfo, T_strCookie))
+		return strResult;
+	std::string strRenameUrl = str(boost::format(RENAME_FILE_URL) % userinfo.bdstoken);
+	BaiduHttp.Send(POST, strRenameUrl, "filelist=" + strSend);
+	strRenameUrl = BaiduHttp.GetResponseText();
+	rapidjson::Document dc;
+	dc.Parse(strRenameUrl.c_str());
+	if (!dc.IsObject())
+		return strResult;
+	int nErrorcode = 0;
+	if (dc.HasMember("errno") && dc["errno"].IsInt())
+	{
+		nErrorcode = dc["errno"].GetInt();
+		if (nErrorcode!=0)
+			return strResult;
+		else
+		{
+			std::string strSupDir;
+			int npos = strPath.rfind("/");
+			if (npos != std::string::npos)
+			{
+				strSupDir = strPath.substr(0, npos);
+				if (strSupDir.empty())
+					strSupDir = "/";
+			}
+			strResult = GetBaiduFileListInfo(strSupDir, T_strCookie);
+		}
+	}
+	return strResult;
+}
 
 CBaiduParse::CBaiduParse()
 {

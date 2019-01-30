@@ -2,6 +2,7 @@
 #define __HTTP_REQUEST__
 #include <windows.h>
 #include <string>
+#include <set>
 #include <vector>
 #include <map>
 #include <curl/curl.h>

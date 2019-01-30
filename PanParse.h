@@ -10,6 +10,7 @@
 #undef min
 #undef max
 #include "Http_Request.h"
+#include "rapidjson/document.h"
 #define HOME_URL "https://pan.baidu.com/disk/home?#/all?path=%2F&vmode=list"
 #define FILE_LIST_URL "https://pan.baidu.com/api/list?order=name&desc=1&showempty=0&web=1&page=1&num=100&dir=%1%&t=0.1312003882264028&channel=chunlei&web=1&app_id=250528&bdstoken=%2%&logid=%3%&clienttype=0&startLogTime=%4%"
 #define DOWN_LOCAL_FILE "http://d.pcs.baidu.com/rest/2.0/pcs/file?app_id=250528&channel=00000000000000000000000000000000&check_blue=1&clienttype=8&devuid=0&dtype=1&ehps=0&err_ver=1.0&es=1&esl=1&method=locatedownload&path=%1%&ver=4.0&version=6.0.0.12&vip=3"
@@ -18,6 +19,11 @@
 #define DISK_CAPACITY_QUERY "https://pan.baidu.com/api/quota?app_id=250528&bdstoken=%1%&channel=chunlei&checkexpire=1&checkfree=1&clienttype=0&web=1"
 #define NETDISK_USER_AGENT "netdisk;6.0.0.12;PC;PC-Windows;10.0.16299;WindowsBaiduYunGuanJia"
 #define SHARE_FILE_LIST_URL "https://pan.baidu.com/share/list?uk=%1%&shareid=%2%&order=other&desc=1&showempty=0&web=1&page=1&num=100&dir=%3%&t=0.46885612477703087&channel=chunlei&web=1&app_id=250528&bdstoken=%4%&logid=%5%&clienttype=0"
+#define RENAME_FILE_URL "https://pan.baidu.com/api/filemanager?app_id=250528&async=1&bdstoken=%1%&channel=chunlei&clienttype=0&opera=rename&web=1"
+#define OFF_LINE_DOWNLOAD_URL "https://pan.baidu.com/rest/2.0/services/cloud_dl?app_id=250528&bdstoken=%1%&channel=chunlei&clienttype=0&file_sha1=&method=add_task&save_path=%2%&source_url=%3%&type=3&web=1"
+#define QUERY_LIST_TASKIDS_URL "https://pan.baidu.com/rest/2.0/services/cloud_dl?app_id=250528&bdstoken=%1%&channel=chunlei&clienttype=0&method=query_task&op_type=1&task_ids=%2%&web=1"
+#define OFF_LINE_QUERY_ALL_URL "https://pan.baidu.com/rest/2.0/services/cloud_dl?app_id=250528&bdstoken=%1%&channel=chunlei&clienttype=0&limit=100&method=list_task&need_task_info=1&start=0&status=255&web=1"
+#define OFF_LINE_DELETE_TASKID_URL "https://pan.baidu.com/rest/2.0/services/cloud_dl?app_id=250528&bdstoken=%1%&channel=chunlei&clienttype=0&method=delete_task&task_id=%2%&web=1"
 extern HINSTANCE g_hInstance;
 typedef struct baiduRequestInfo
 {
@@ -144,6 +150,8 @@ public:
 获取百度网盘文件列表信息
 */
 std::string GetBaiduFileListInfo(const std::string& path, const std::string strCookie);
+/*枚举出百度网盘所有文件夹*/
+bool EnumAllFolder(const std::string& path, const std::string strCookie, rapidjson::Document& datajson);
 /*获取百度网盘分享文件列表信息*/
 std::string GetBaiduShareFileListInfo(const std::string& path, const std::string strCookie, BAIDUREQUESTINFO userinfo);
 /*
@@ -180,6 +188,14 @@ std::string AnalysisShareUrlInfo(const std::string strUrl,std::string& strCookie
 判断是否是带密码分享链接
 */
 int IsPassWordShareUrl(std::string& strUrl, std::string& strCookies);
+/*添加离线下载*/
+std::string AddOfflineDownload(const std::string& strUrl, const std::string& strSavePath,const std::string& strCookie);
+/*查询所有的离线下载任务列表*/
+REGEXVALUE QueryOffLineList(const std::string& strCookie);
+/*根据taskid查询对应的任务状态列表信息*/
+std::string QueryTaskIdListStatus(const REGEXVALUE& TaskIdList, const std::string& strCookie);
+/*清除离线下载任务记录*/
+std::string DeleteOffLineTask(const REGEXVALUE& TaskIdList, const std::string& strCookie);
 /*
 带验证码的请求
 */
@@ -202,6 +218,8 @@ std::string GetBaiduLocalFileAddr(const std::string path, const std::string strC
 std::string ShareBaiduFile(SHAREFILEINFO shareFileinfo, const std::string strCookie);
 /*删除百度云文件*/
 std::string DeleteBaiduFile(const std::string strJsonData, const std::string strCookie);
+/*百度云用户文件重命名*/
+std::string BaiduRename(const std::string& strPath,const std::string& strNewName, const std::string strCookie);
 /*
  获取时间戳
 */

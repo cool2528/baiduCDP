@@ -133,7 +133,29 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 				}
 			}
 			ItemValue.Downloadpercentage = (size_t)Getpercentage(completedLength, totalLength);
-			ItemValue.DownloadSpeed = GetFileSizeType(downloadSpeed);
+			DOWNLOADSPEEDINFO szFileSize = GetFileSizeType(downloadSpeed);
+			int isRate = 0;
+			if (szFileSize.strUnit =="B")
+			{
+				ItemValue.DownloadSpeed = str(boost::format("%.1f B") % szFileSize.dwSize);
+				isRate = 1;
+			}else if (szFileSize.strUnit == "KB")
+			{
+				ItemValue.DownloadSpeed = str(boost::format("%.1f KB") % szFileSize.dwSize);
+				if(szFileSize.dwSize<100)
+					isRate = 1;
+			}
+			else if (szFileSize.strUnit == "MB")
+			{
+				ItemValue.DownloadSpeed = str(boost::format("%.1f MB") % szFileSize.dwSize);
+			}
+			else if (szFileSize.strUnit == "GB")
+			{
+				ItemValue.DownloadSpeed = str(boost::format("%.1f GB") % szFileSize.dwSize);
+			}
+			rapidjson::Value isRateLimiting(rapidjson::kNumberType);	//是否限速
+			isRateLimiting.SetInt(isRate);
+			sendItemObj.AddMember(rapidjson::StringRef("isRateLimiting"), isRateLimiting, sendJson.GetAllocator());
 			rapidjson::Value connections(rapidjson::kStringType);//当前服务器下载链接数量
 			connections.SetString(ItemValue.connections.c_str(), ItemValue.connections.length(), sendJson.GetAllocator());
 			sendItemObj.AddMember(rapidjson::StringRef("connections"), connections, sendJson.GetAllocator());
@@ -190,24 +212,29 @@ void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 	}
 }
 #endif
-std::string CWkeWindow::GetFileSizeType(double dSize)
+DOWNLOADSPEEDINFO CWkeWindow::GetFileSizeType(double dSize)
 {
-	std::string szFileSize;
+	DOWNLOADSPEEDINFO szFileSize;
+	ZeroMemory(&szFileSize, sizeof(DOWNLOADSPEEDINFO));
 	if (dSize <1024)
 	{
-		szFileSize = str(boost::format("%.2f B") % m_BaiduPare.roundEx(dSize));
+		szFileSize.dwSize = m_BaiduPare.roundEx(dSize);
+		szFileSize.strUnit = "B";
 	}
 	else if (dSize >1024 && dSize < 1024 * 1024 * 1024 && dSize <1024 * 1024)
 	{
-		szFileSize = str(boost::format("%.2f KB") % m_BaiduPare.roundEx(dSize / 1024));
+		szFileSize.dwSize = m_BaiduPare.roundEx(dSize / 1024);
+		szFileSize.strUnit = "KB";
 	}
 	else if (dSize >1024 * 1024 && dSize <1024 * 1024 * 1024)
 	{
-		szFileSize = str(boost::format("%.2f MB") % m_BaiduPare.roundEx(dSize / 1024 / 1024));
+		szFileSize.dwSize = m_BaiduPare.roundEx(dSize / 1024 / 1024);
+		szFileSize.strUnit = "MB";
 	}
 	else if (dSize >1024 * 1024 * 1024)
 	{
-		szFileSize = str(boost::format("%.2f GB") % m_BaiduPare.roundEx(dSize / 1024 / 1024 / 1024));
+		szFileSize.dwSize = m_BaiduPare.roundEx(dSize / 1024 / 1024 / 1024);
+		szFileSize.strUnit = "GB";
 	}
 	return szFileSize;
 }
@@ -422,7 +449,30 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 							}
 						}
 						ItemValue.Downloadpercentage = (size_t)GetInstance()->Getpercentage(completedLength, totalLength);
-						ItemValue.DownloadSpeed = GetInstance()->GetFileSizeType(downloadSpeed);
+						DOWNLOADSPEEDINFO szFileSize = GetInstance()->GetFileSizeType(downloadSpeed);
+						int isRate = 0;
+						if (szFileSize.strUnit == "B")
+						{
+							ItemValue.DownloadSpeed = str(boost::format("%.1f B") % szFileSize.dwSize);
+							isRate = 1;
+						}
+						else if (szFileSize.strUnit == "KB")
+						{
+							ItemValue.DownloadSpeed = str(boost::format("%.1f KB") % szFileSize.dwSize);
+							if (szFileSize.dwSize < 100)
+								isRate = 1;
+						}
+						else if (szFileSize.strUnit == "MB")
+						{
+							ItemValue.DownloadSpeed = str(boost::format("%.1f MB") % szFileSize.dwSize);
+						}
+						else if (szFileSize.strUnit == "GB")
+						{
+							ItemValue.DownloadSpeed = str(boost::format("%.1f GB") % szFileSize.dwSize);
+						}
+						rapidjson::Value isRateLimiting(rapidjson::kNumberType);	//是否限速
+						isRateLimiting.SetInt(isRate);
+						sendItemObj.AddMember(rapidjson::StringRef("isRateLimiting"), isRateLimiting, sendJson.GetAllocator());
 						rapidjson::Value connections(rapidjson::kStringType);//当前服务器下载链接数量
 						connections.SetString(ItemValue.connections.c_str(), ItemValue.connections.length(), sendJson.GetAllocator());
 						sendItemObj.AddMember(rapidjson::StringRef("connections"), connections, sendJson.GetAllocator());
@@ -480,6 +530,56 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 			std::string strGID(pbuffer);
 			delete pbuffer;
 			updateDownloadShareListdata(strGID);
+		}
+	}
+	break;
+	case UI_UPDATE_FOLODER_LIST_MSG:
+	{
+		if (lParam)
+		{
+			const char* pbuffer = (const char*)lParam;
+			std::string strResultJson(pbuffer);
+			delete pbuffer;
+			jsExecState es = wkeGlobalExec(app.window);
+			jsValue thisObject = jsGetGlobal(es, "app");
+			bool b = jsIsObject(thisObject);
+			jsValue func = jsGet(es, thisObject, "updateTreeListData");
+			strResultJson = GetInstance()->m_BaiduPare.Gbk_To_Utf8(strResultJson.c_str());
+			jsValue jsArg[1] = { jsString(es, strResultJson.c_str()) };
+			jsCall(es, func, thisObject, jsArg, 1);
+		}
+	}
+	break;
+	case UI_UPDATE_OFF_LINE_LIST_MSG:
+	{
+		if (lParam)
+		{
+			const char* pbuffer = (const char*)lParam;
+			std::string strResultJson(pbuffer);
+			delete pbuffer;
+			jsExecState es = wkeGlobalExec(app.window);
+			jsValue thisObject = jsGetGlobal(es, "app");
+			bool b = jsIsObject(thisObject);
+			jsValue func = jsGet(es, thisObject, "updateOfflineTableList");
+			//strResultJson = GetInstance()->m_BaiduPare.Gbk_To_Utf8(strResultJson.c_str());
+			jsValue jsArg[1] = { jsString(es, strResultJson.c_str()) };
+			jsCall(es, func, thisObject, jsArg, 1);
+		}
+	}
+	break;
+	case UI_UPDATE_USER_FILE_DATA_MSG:
+	{
+		if (lParam)
+		{
+			const char* pbuffer = (const char*)lParam;
+			std::string strResultJson(pbuffer);
+			delete pbuffer;
+			jsExecState es = wkeGlobalExec(app.window);
+			jsValue thisObject = jsGetGlobal(es, "app");
+			bool b = jsIsObject(thisObject);
+			jsValue func = jsGet(es, thisObject, "updateBaiduList");
+			jsValue jsArg[1] = { jsString(es, strResultJson.c_str()) };
+			jsCall(es, func, thisObject, jsArg, 1);
 		}
 	}
 	break;
@@ -720,8 +820,8 @@ BOOL CWkeWindow::RunAria2()
 	si.cb = sizeof(si);
 	ZeroMemory(&pi, sizeof(pi));
 	si.dwFlags = STARTF_USESHOWWINDOW;  // 指定wShowWindow成员有效
-	si.wShowWindow = false;          // 此成员设为TRUE的话则显示新建进程的主窗口，
-	std::string strCommandlineArg = str(boost::format("aria2c.exe --check-certificate=false --disable-ipv6=true --enable-rpc=true --quiet=true --rpc-allow-origin-all=true --rpc-listen-all=true --rpc-listen-port=6800 --rpc-secret=CDP --stop-with-process=%1%")\
+	si.wShowWindow = true;          // 此成员设为TRUE的话则显示新建进程的主窗口，
+	std::string strCommandlineArg = str(boost::format("aria2c.exe --check-certificate=false --disable-ipv6=true --enable-rpc=true --quiet=false --file-allocation=falloc --max-concurrent-downloads=5  --rpc-allow-origin-all=true --rpc-listen-all=true --rpc-listen-port=6800 --rpc-secret=CDP --stop-with-process=%1%")\
 		% std::to_string(GetCurrentProcessId()));
 	BOOL bRet = ::CreateProcessA(NULL,           // 不在此指定可执行文件的文件名
 		const_cast<char*>(strCommandlineArg.c_str()),      // 命令行参数
@@ -908,6 +1008,12 @@ bool CWkeWindow::createWebWindow(Application* app)
 	wkeJsBindFunction("switchShareFolder", switchShareFolder, this, 7);
 	//分享链接下载按钮被单击绑定的回调
 	wkeJsBindFunction("DownSelectShareFile", DownSelectShareFile, this, 1);
+	//百度文件改名绑定函数
+	wkeJsBindFunction("BaiduFileRename", BaiduFileRename, this, 2);
+	//获取当前账号下所有文件夹
+	wkeJsBindFunction("EnumFolder", EnumFolder, this, 0);
+	//绑定离线下载函数
+	wkeJsBindFunction("OffLineDownload", OffLineDownload, this, 3);
 	return true;
 }
 
@@ -948,28 +1054,45 @@ bool CWkeWindow::onLoadUrlBegin(wkeWebView webView, void* param, const char* url
 		std::wstring path = GetInstance()->getResourcesPath(GetInstance()->utf8ToUtf16(localPath));
 		std::vector<char> buffer;
 		GetInstance()->readJsFile(path.c_str(), &buffer);
+#if _DEBUG
+		wkeNetSetData(job, buffer.data(), buffer.size());
+#else
 		std::string fileName = GetInstance()->m_BaiduPare.Unicode_To_Ansi(path.c_str());
 		char szNmae[MAX_PATH];
 		ZeroMemory(szNmae, MAX_PATH);
 		strcpy_s(szNmae, fileName.c_str());
+		char szExtName[MAX_PATH];
+		char* szExtPtr = nullptr;
+		ZeroMemory(szExtName, MAX_PATH);
+		szExtPtr = PathFindExtensionA(szNmae);
+		if (szExtPtr != nullptr)
+			CopyMemory(szExtName, szExtPtr, strlen(szExtPtr));
 		PathStripPathA(szNmae);
 		fileName = szNmae;
-		if (fileName == "element.html" || fileName == "app.js" || fileName == "elMe.css")
+		if (fileName == "index.js" || fileName == "vue.js" || fileName == "element-icons.woff")
+		{
+			wkeNetSetData(job, buffer.data(), buffer.size());
+		}
+		else
 		{
 			std::string key = "0CoJUm6Qyw8W8jud";
 			std::string  Deresult;
 			Deresult = CCEncryption::AES_Decrypt(key, buffer.data());
-			if (fileName == "app.js" )
+			if (!strcmpi(".png", szExtName))
 			{
-				Deresult = GetInstance()->m_BaiduPare.Gbk_To_Utf8(Deresult.c_str());
+				Deresult = aip::base64_decode(buffer.data());
+				wkeNetSetData(job, (char*)Deresult.c_str(), Deresult.length());
 			}
-			wkeNetSetData(job, (char*)Deresult.c_str(), Deresult.length());
-		}
-		else
-		{
-			wkeNetSetData(job, buffer.data(), buffer.size());
-		}
-
+			else
+			{
+				if (fileName == "app.js")
+				{
+					Deresult = GetInstance()->m_BaiduPare.Gbk_To_Utf8(Deresult.c_str());
+				}
+				wkeNetSetData(job, (char*)Deresult.c_str(), Deresult.length());
+	}
+}
+#endif
 		return true;
 	}
 	return false;
@@ -1055,6 +1178,12 @@ void CWkeWindow::GetLoginCookieCallBack(wkeWebView webWindow, void* param)
 	wkeShowWindow(webWindow, true);
 	std::string Url = wkeGetURL(webWindow);
 	int npos = Url.find("disk/home?");
+	std::string strTitle = wkeGetTitle(webWindow);
+	strTitle = GetInstance()->m_BaiduPare.Utf8_To_Gbk(strTitle.c_str());
+	if (strTitle == "绑定手机" && Url.find("guidebind?") != std::string::npos)
+	{
+		wkeLoadURL(webWindow, "https://pan.baidu.com/");
+	}
 	if (npos != std::string::npos)
 	{
 		GetInstance()->isLogin = true;
@@ -1124,6 +1253,10 @@ void CWkeWindow::GetLoginCookieCallBack(wkeWebView webWindow, void* param)
 			jsValue jsArg[1] = { jsString(es, argJson.c_str()) };
 			jsCall(es, func, thisObject, jsArg, 1);
 			wkeDestroyWebWindow(webWindow);
+			if (::IsWindow(HWND(param)))
+			{
+				::PostMessage(HWND(param), WM_CLOSE, NULL, NULL);
+			}
 		}
 	}
 }
@@ -1132,24 +1265,29 @@ wkeWebView CWkeWindow::onCreateView(wkeWebView webWindow, void* param, wkeNaviga
 	if (!param)return webWindow;
 	std::string StrUrl(wkeGetString(url));
 	::OutputDebugStringA(wkeGetString(url));
-	wkeWebView newWindow = wkeCreateWebWindow(WKE_WINDOW_TYPE_POPUP, NULL, features->x, features->y, features->width, features->height);
-	wkeSetCspCheckEnable(newWindow, false);
+	wkeWebView newMainWindow = wkeCreateWebWindow(WKE_WINDOW_TYPE_POPUP, NULL, features->x, features->y, features->width, features->height);
+	wkeSetCspCheckEnable(newMainWindow, false);
+	wkePerformCookieCommand(newMainWindow,wkeCookieCommandClearAllCookies);
+	wkeReload(newMainWindow);
 	if (StrUrl.find("pan.baidu.com") != std::string::npos)
 	{
-		wkeOnDocumentReady(newWindow, GetLoginCookieCallBack, param);
+		wkeOnDocumentReady(newMainWindow, GetLoginCookieCallBack, param);
 		static auto subCreateView = [](wkeWebView webWindow, void* param, wkeNavigationType navType, const wkeString url, const wkeWindowFeatures* features)->wkeWebView {
 			RECT rc;
 			::GetClientRect((HWND)param, &rc);
 			wkeWebView newWindow = wkeCreateWebWindow(WKE_WINDOW_TYPE_CONTROL, (HWND)param, 0, 0, rc.right-rc.left, rc.bottom-rc.top);
 			wkeShowWindow(newWindow, true);
+			wkePerformCookieCommand(newWindow, wkeCookieCommandClearAllCookies);
+			wkeReload(newWindow);
+			wkeOnDocumentReady(newWindow, GetLoginCookieCallBack, param);
 			return newWindow;
 		};
-		::SetWindowText(wkeGetWindowHandle(newWindow), _T("登录百度账号"));
-		wkeOnCreateView(newWindow, subCreateView, wkeGetWindowHandle(newWindow));
-		//wkeSetDebugConfig(app.window, "showDevTools", GetInstance()->m_BaiduPare.Gbk_To_Utf8("E:\\Download\\miniblink-181214\\front_end\\inspector.html").c_str());
+		::SetWindowText(wkeGetWindowHandle(newMainWindow), _T("登录百度账号"));
+		wkeOnCreateView(newMainWindow, subCreateView, wkeGetWindowHandle(newMainWindow));
+		wkeSetDebugConfig(app.window, "showDevTools", GetInstance()->m_BaiduPare.Gbk_To_Utf8("E:\\Download\\miniblink-181214\\front_end\\inspector.html").c_str());
 	}
-	wkeShowWindow(newWindow, true);
-	return newWindow;
+	wkeShowWindow(newMainWindow, true);
+	return newMainWindow;
 }
 
 void CWkeWindow::UpdateDownloadList(const std::string& strJson)
@@ -1237,9 +1375,166 @@ jsValue CWkeWindow::LogOut(jsExecState es, void* param)
 		GetInstance()->m_BaiduPare.WriteFileBuffer(szModeleName, const_cast<char*>(strJsonData.c_str()), strJsonData.length());
 	}
 	wkeRunJS(app.window, "app.tablelistisShwo = false;app.DiskUsed = '';  app.DiskTotal = '';");
+	HttpRequest BaiduHttp;
+	BaiduHttp.SetHttpRedirect(true);
+	BaiduHttp.SetRequestCookies(GetInstance()->strCookies);
+	BaiduHttp.Send(GET, "https://passport.baidu.com/?logout&u=https%3A%2F%2Fpan.baidu.com%2F");
+	std::string strResult = BaiduHttp.GetallResponseHeaders();
 	GetInstance()->strCookies = "";
 	GetInstance()->isLogin = false;
 	return jsUndefined();
+}
+
+jsValue CWkeWindow::EnumFolder(jsExecState es, void* param)
+{
+	if (!param)return jsUndefined();
+	//获取参数的数量
+	int argCount = jsArgCount(es);
+	if (argCount != 0)
+		return jsUndefined();
+	auto updateSavelist = [es]() {
+		rapidjson::Document dcdata;
+		GetInstance()->m_BaiduPare.EnumAllFolder("/", GetInstance()->strCookies, dcdata);
+		{
+			rapidjson::StringBuffer buffer;
+			rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+			dcdata.Accept(writer);
+			std::string strResultJson = buffer.GetString();
+			PostMessage(GetInstance()->m_hwnd, UI_UPDATE_FOLODER_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResultJson));
+		}
+	};
+	std::thread upthread(updateSavelist);
+	upthread.detach();
+	return jsUndefined();
+}
+
+jsValue CWkeWindow::OffLineDownload(jsExecState es, void* param)
+{
+	jsValue bResult = jsInt(0);
+	if (!param)return bResult;
+	//获取参数的数量
+	int argCount = jsArgCount(es);
+	if (argCount < 3)
+		return bResult;
+	jsType type = jsArgType(es, 0);
+	if (JSTYPE_STRING != type)
+		return bResult;
+	type = jsArgType(es, 1);
+	if (JSTYPE_STRING != type)
+		return bResult;
+	type = jsArgType(es, 2);
+	if (JSTYPE_NUMBER != type)
+		return bResult;
+	jsValue arg0 = jsArg(es, 0);
+	jsValue arg1 = jsArg(es, 1);
+	jsValue arg2 = jsArg(es, 2);
+	std::string argUrl = jsToTempString(es, arg0);
+	std::string argPath = jsToTempString(es, arg1);
+	int nType = jsToInt(es, arg2);
+	if (GetInstance()->strCookies.empty())
+		return bResult;
+	auto OffDownload = [](int nType,std::string argUrl,std::string argPath) {
+		switch (nType)
+		{
+		case 1:
+		{
+			//只是更新离线下载列表
+			REGEXVALUE Tasklist;
+			ZeroMemory(&Tasklist, sizeof(REGEXVALUE));
+			Tasklist = GetInstance()->m_BaiduPare.QueryOffLineList(GetInstance()->strCookies);
+			std::string strResult = GetInstance()->m_BaiduPare.QueryTaskIdListStatus(Tasklist, GetInstance()->strCookies);
+			if (!strResult.empty())
+			{
+				PostMessage(GetInstance()->m_hwnd, UI_UPDATE_OFF_LINE_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResult));
+			}
+			else
+			{
+				strResult = "{\"data\":[]}";
+				PostMessage(GetInstance()->m_hwnd, UI_UPDATE_OFF_LINE_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResult));
+			}
+		}
+		break;
+		case 2:
+		{
+			//添加离线下载任务
+			REGEXVALUE Tasklist;
+			ZeroMemory(&Tasklist, sizeof(REGEXVALUE));
+			argUrl = GetInstance()->m_BaiduPare.Utf8_To_Gbk(argUrl.c_str());
+			argPath = GetInstance()->m_BaiduPare.Utf8_To_Gbk(argPath.c_str());
+			std::string strTaskID = GetInstance()->m_BaiduPare.AddOfflineDownload(argUrl, argPath, GetInstance()->strCookies);
+			if (!strTaskID.empty())
+			{
+				Tasklist = GetInstance()->m_BaiduPare.QueryOffLineList(GetInstance()->strCookies);
+				auto is_exist = [strTaskID](const REGEXVALUE& Tasklist)->bool {
+					bool bResult = false;
+					for (size_t i = 0; i < Tasklist.size(); i++)
+					{
+						if (Tasklist.at(0) == strTaskID)
+						{
+							bResult = true;
+							break;
+						}
+					}
+					return bResult;
+				};
+				if (!is_exist(Tasklist))
+					Tasklist.push_back(strTaskID);
+			}
+			std::string strResult = GetInstance()->m_BaiduPare.QueryTaskIdListStatus(Tasklist, GetInstance()->strCookies);
+			if (!strResult.empty())
+			{
+				PostMessage(GetInstance()->m_hwnd, UI_UPDATE_OFF_LINE_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResult));
+			}
+			else
+			{
+				strResult = "{\"data\":[]}";
+				PostMessage(GetInstance()->m_hwnd, UI_UPDATE_OFF_LINE_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResult));
+			}
+		}
+		break;
+		case 3:
+		{
+			//清除离线下载任务
+			REGEXVALUE Tasklist;
+			ZeroMemory(&Tasklist, sizeof(REGEXVALUE));
+			argUrl = GetInstance()->m_BaiduPare.Utf8_To_Gbk(argUrl.c_str());
+			rapidjson::Document dc;
+			dc.Parse(argUrl.c_str());
+			if (!dc.IsObject())
+				return;
+			if (dc.HasMember("data") && dc["data"].IsArray())
+			{
+				for (auto & v:dc["data"].GetArray())
+				{
+					if (v.IsString())
+					{
+						Tasklist.push_back(v.GetString());
+					}
+				}
+				GetInstance()->m_BaiduPare.DeleteOffLineTask(Tasklist, GetInstance()->strCookies);
+				Tasklist.clear();
+				Tasklist = GetInstance()->m_BaiduPare.QueryOffLineList(GetInstance()->strCookies);
+			}
+			std::string strResult = GetInstance()->m_BaiduPare.QueryTaskIdListStatus(Tasklist, GetInstance()->strCookies);
+			if (!strResult.empty())
+			{
+				PostMessage(GetInstance()->m_hwnd, UI_UPDATE_OFF_LINE_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResult));
+			}
+			else
+			{
+				strResult = "{\"data\":[]}";
+				PostMessage(GetInstance()->m_hwnd, UI_UPDATE_OFF_LINE_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResult));
+			}
+		}
+		break;
+		default:
+			break;
+		}
+	};
+	std::thread OffThread(OffDownload,nType,argUrl,argPath);
+	OffThread.detach();
+	bResult = jsInt(1);
+	return bResult;
 }
 
 void CWkeWindow::blinkMaximize()
@@ -1330,6 +1625,19 @@ jsValue CWkeWindow::IsLoginBaidu(jsExecState es, void* param)
 		{
 			BaiduUserInfo baiduInfo;
 			ZeroMemory(&baiduInfo, sizeof(BaiduUserInfo));
+			auto updateSavelist = [es]() {
+				rapidjson::Document dcdata;
+				GetInstance()->m_BaiduPare.EnumAllFolder("/", GetInstance()->strCookies, dcdata);
+				{
+					rapidjson::StringBuffer buffer;
+					rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+					dcdata.Accept(writer);
+					std::string strResultJson = buffer.GetString();
+					PostMessage(GetInstance()->m_hwnd, UI_UPDATE_FOLODER_LIST_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(strResultJson));
+				}
+			};
+			std::thread upthread(updateSavelist);
+			upthread.detach();
 			if (GetInstance()->m_BaiduPare.GetloginBassInfo(baiduInfo, GetInstance()->strCookies))
 			{
 				if (!baiduInfo.bdstoken.empty() && !baiduInfo.strUserName.empty())
@@ -1411,14 +1719,20 @@ jsValue CWkeWindow::SwitchDirPath(jsExecState es, void* param)
 		return jsUndefined();
 	jsValue arg0 = jsArg(es, 0);
 	std::string arg0str = jsToTempString(es, arg0);
+	auto UpdateTable = [](std::string strData) {
+		strData = GetInstance()->m_BaiduPare.Utf8_To_Gbk(strData.c_str());
+		std::string argJson = GetInstance()->m_BaiduPare.GetBaiduFileListInfo(strData, GetInstance()->strCookies);
+		PostMessage(GetInstance()->m_hwnd, UI_UPDATE_USER_FILE_DATA_MSG, NULL, (LPARAM)GetInstance()->AlloclocalHeap(argJson));
+	};
+	std::thread updateTableThread(UpdateTable, arg0str);
+	updateTableThread.detach();
 	//jsExecState es = wkeGlobalExec(app.window);
-	arg0str = GetInstance()->m_BaiduPare.Utf8_To_Gbk(arg0str.c_str());
-	jsValue thisObject = jsGetGlobal(es, "app");
-	bool b = jsIsObject(thisObject);
-	jsValue func = jsGet(es, thisObject, "updateBaiduList");
-	std::string argJson = GetInstance()->m_BaiduPare.GetBaiduFileListInfo(arg0str, GetInstance()->strCookies);
-	jsValue jsArg[1] = { jsString(es, argJson.c_str()) };
-	jsCall(es, func, thisObject, jsArg, 1);
+	//arg0str = GetInstance()->m_BaiduPare.Utf8_To_Gbk(arg0str.c_str());
+	//jsValue thisObject = jsGetGlobal(es, "app");
+	//bool b = jsIsObject(thisObject);
+	//jsValue func = jsGet(es, thisObject, "updateBaiduList");
+	//jsValue jsArg[1] = { jsString(es, argJson.c_str()) };
+	//jsCall(es, func, thisObject, jsArg, 1);
 	result = jsInt(1);
 	return result;
 }
@@ -1549,6 +1863,30 @@ jsValue CWkeWindow::ShareBaiduFile(jsExecState es, void* param)
 		}
 	}
 	return jsString(es, strRetResult.c_str());
+}
+
+jsValue CWkeWindow::BaiduFileRename(jsExecState es, void* param)
+{
+	if (!param)return jsUndefined();
+	int argCount = jsArgCount(es);
+	if (argCount < 2)
+		return jsUndefined();
+	jsType type = jsArgType(es, 0);
+	if (JSTYPE_STRING != type)
+		return jsUndefined();
+	type = jsArgType(es, 1);
+	if (JSTYPE_STRING != type)
+		return jsUndefined();
+	jsValue arg0 = jsArg(es, 0);
+	std::string arg0str = jsToTempString(es, arg0);
+	jsValue arg1 = jsArg(es, 1);
+	std::string arg0str2 = jsToTempString(es, arg1);
+	std::string strResultJson = GetInstance()->m_BaiduPare.BaiduRename(GetInstance()->m_BaiduPare.Utf8_To_Gbk(arg0str.c_str()), GetInstance()->m_BaiduPare.Utf8_To_Gbk(arg0str2.c_str()),GetInstance()->strCookies);
+	jsValue thisObject = jsGetGlobal(es, "app");
+	jsValue func = jsGet(es, thisObject, "updateBaiduList");
+	jsValue jsArg[1] = { jsString(es, strResultJson.c_str()) };
+	jsCall(es, func, thisObject, jsArg, 1);
+	return jsUndefined();
 }
 
 jsValue CWkeWindow::DeleteBaiduFile(jsExecState es, void* param)
