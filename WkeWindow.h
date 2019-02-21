@@ -77,6 +77,7 @@ typedef struct retryCount
 #define UI_UPDATE_FOLODER_LIST_MSG WM_USER + 0x112
 #define UI_UPDATE_OFF_LINE_LIST_MSG WM_USER + 0x113
 #define UI_UPDATE_USER_FILE_DATA_MSG WM_USER +0x114
+#define UI_QUIT_MSG WM_USER +0x115
 /*
 自定义消息结束
 */
@@ -103,7 +104,8 @@ typedef struct retryCount
 #define ARIA2_HTTP_REQUESTURL "http://127.0.0.1:6800/jsonrpc"
 //用定时器更新发送查询数据
 #define UPDTAE_UI_TIMEID 508
-
+//API请求主域名
+#define API_DOMAIN_NAME "https://api.baiducdp.com"
 typedef struct DownloadSpeedinfo
 {
 	std::string strUnit;	//单位
@@ -301,6 +303,12 @@ public:
 	切换网盘目录
 	*/
 	static jsValue SwitchDirPath(jsExecState es, void* param);
+	/*打开指定网址*/
+	static jsValue OpenAssignUrl(jsExecState es, void* param);
+	/*更新应用*/
+	static jsValue UpdateApp(jsExecState es, void* param);
+	/*检测是否需要更新*/
+	static jsValue isUpdate(jsExecState es, void* param);
 	/*
 	下载用户网盘的文件
 	*/

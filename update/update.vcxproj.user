@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LocalDebuggerCommandArguments>https://vip.d0.baidupan.com/file/?VzFSbF5vAjMIAQc/UGVRPVFuBDwEv1fsAJdbulaEBq5Vs1SMAc4AsATpVLQLZ1B/Bm1UYQJzAnoGaFQiViwDZFc+UmleZgIJCDcHNVA5UWdROwQ5BGJXYAA/W21WLAZhVSZUPgFlAGYEYFQxC2tQYwZvVHcCLQJwBjxUYFY6AzNXblIqXjMCZAhxB2NQNFF/UWkEYwRiV2EANVtvVjMGM1VnVGIBOQBjBGZUMwtpUGgGOFQ0Am4COAYyVGRWMwM6V2dSNF4xAm8IZwcwUDZRMVElBHsEMlclACFbKFZ5BmJVJ1RqATgAaQRjVDMLZ1BiBmVUaAJ7AnQGaFQ/Vm8DZFdqUjReNgJjCG4HZ1AxUWFRPwQ2BGhXewAp C:\Users\ADMINI~1\AppData\Local\Temp\</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LocalDebuggerCommandArguments>https://vip.d0.baidupan.com/file/?B2EBP1prAzIGDwA4AjdcMAQ7ADhR6gC7UsUE5VSGBq5Vs1WNDcICsgXoA+NUOFxzVD8POgBxVy9XOQRyAHpbPAduATpaYgMIBjkAMgJrXGoEbgA9UTcAN1JtBDJULgZhVSZVPw1pAmQFYQNmVDRcb1Q9DywAL1clV20EMABsW2sHPgF5WjcDZQZ/AGQCZlxyBDwAZ1E3ADZSZwQwVDEGM1VnVWMNNQJhBWcDZFQ2XGRUag9vAGxXbVdjBDQAZVtiBzcBZ1o1A24GaQA3AmRcPARwAH9RZwByUnMEd1R7BmJVJ1VrDTQCawViA2RUOFxuVDcPMwB5VyFXOQRvADlbPAc6AWdaMgNiBmAAYAJjXGgEawAyUTkALFJ7  C:\Users\ADMINI~1\AppData\Local\Temp\</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+</Project>

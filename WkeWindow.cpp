@@ -14,6 +14,7 @@
 #pragma comment(lib,"shlwapi.lib")
 #pragma warning(disable:4996)
 std::mutex g_mutx;
+std::shared_ptr<CWkeWindow> CWkeWindow::Instance = nullptr;
 WNDPROC CWkeWindow::m_oldProc = NULL;
 
 void* CWkeWindow::AlloclocalHeap(const std::string& strBuffer)
@@ -30,7 +31,6 @@ void* CWkeWindow::AlloclocalHeap(const std::string& strBuffer)
 	return pResutPtr;
 }
 
-std::shared_ptr<CWkeWindow> CWkeWindow::Instance = nullptr;
 #if 1
 void CWkeWindow::ParseAria2JsonInfo(const std::string& strJSon)
 {
@@ -583,6 +583,11 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 		}
 	}
 	break;
+	case UI_QUIT_MSG:
+	{
+		::PostQuitMessage(0);
+	}
+	break;
 	default:
 		break;
 	}
@@ -820,8 +825,8 @@ BOOL CWkeWindow::RunAria2()
 	si.cb = sizeof(si);
 	ZeroMemory(&pi, sizeof(pi));
 	si.dwFlags = STARTF_USESHOWWINDOW;  // 指定wShowWindow成员有效
-	si.wShowWindow = true;          // 此成员设为TRUE的话则显示新建进程的主窗口，
-	std::string strCommandlineArg = str(boost::format("aria2c.exe --check-certificate=false --disable-ipv6=true --enable-rpc=true --quiet=false --file-allocation=falloc --max-concurrent-downloads=5  --rpc-allow-origin-all=true --rpc-listen-all=true --rpc-listen-port=6800 --rpc-secret=CDP --stop-with-process=%1%")\
+	si.wShowWindow = false;          // 此成员设为TRUE的话则显示新建进程的主窗口，
+	std::string strCommandlineArg = str(boost::format("aria2c.exe --check-certificate=false --disable-ipv6=true --enable-rpc=true --quiet=true --file-allocation=falloc --max-concurrent-downloads=5  --rpc-allow-origin-all=true --rpc-listen-all=true --rpc-listen-port=6800 --rpc-secret=CDP --stop-with-process=%1%")\
 		% std::to_string(GetCurrentProcessId()));
 	BOOL bRet = ::CreateProcessA(NULL,           // 不在此指定可执行文件的文件名
 		const_cast<char*>(strCommandlineArg.c_str()),      // 命令行参数
@@ -1014,6 +1019,12 @@ bool CWkeWindow::createWebWindow(Application* app)
 	wkeJsBindFunction("EnumFolder", EnumFolder, this, 0);
 	//绑定离线下载函数
 	wkeJsBindFunction("OffLineDownload", OffLineDownload, this, 3);
+	//检测是否需要更新
+	wkeJsBindFunction("isUpdate", isUpdate, this, 1);
+	//打开指定网页
+	wkeJsBindFunction("OpenAssignUrl", OpenAssignUrl, this, 1);
+	//更新应用
+	wkeJsBindFunction("UpdateApp", UpdateApp, this, 1);
 	return true;
 }
 
@@ -1284,7 +1295,9 @@ wkeWebView CWkeWindow::onCreateView(wkeWebView webWindow, void* param, wkeNaviga
 		};
 		::SetWindowText(wkeGetWindowHandle(newMainWindow), _T("登录百度账号"));
 		wkeOnCreateView(newMainWindow, subCreateView, wkeGetWindowHandle(newMainWindow));
+#ifdef _DEBUG
 		wkeSetDebugConfig(app.window, "showDevTools", GetInstance()->m_BaiduPare.Gbk_To_Utf8("E:\\Download\\miniblink-181214\\front_end\\inspector.html").c_str());
+#endif
 	}
 	wkeShowWindow(newMainWindow, true);
 	return newMainWindow;
@@ -1735,6 +1748,95 @@ jsValue CWkeWindow::SwitchDirPath(jsExecState es, void* param)
 	//jsCall(es, func, thisObject, jsArg, 1);
 	result = jsInt(1);
 	return result;
+}
+
+jsValue CWkeWindow::OpenAssignUrl(jsExecState es, void* param)
+{
+	if (!param)return jsUndefined();
+	//获取参数的数量
+	int argCount = jsArgCount(es);
+	if (argCount != 1)
+		return jsUndefined();
+	jsType type = jsArgType(es, 0);
+	if (JSTYPE_STRING != type)
+		return jsUndefined();
+	jsValue arg0 = jsArg(es, 0);
+	std::string arg0str = jsToTempString(es, arg0);
+	if (arg0str.empty())
+		return jsUndefined();
+	::ShellExecuteA(NULL, "open", arg0str.c_str(), NULL, NULL, SW_SHOWNORMAL);
+	return jsUndefined();
+}
+
+jsValue CWkeWindow::UpdateApp(jsExecState es, void* param)
+{
+	if (!param)return jsUndefined();
+	//获取参数的数量
+	int argCount = jsArgCount(es);
+	if (argCount != 1)
+		return jsUndefined();
+	jsType type = jsArgType(es, 0);
+	if (JSTYPE_STRING != type)
+		return jsUndefined();
+	jsValue arg0 = jsArg(es, 0);
+	std::string arg0str = jsToTempString(es, arg0);
+	if (arg0str.empty())
+		return jsUndefined();
+	std::string strCommandlineArg;
+	STARTUPINFOA si;
+	PROCESS_INFORMATION pi;
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+	si.dwFlags = STARTF_USESHOWWINDOW;  // 指定wShowWindow成员有效
+	si.wShowWindow = true;          // 此成员设为TRUE的话则显示新建进程的主窗口，
+	CHAR szPath[MAX_PATH];
+	CHAR szTemp[MAX_PATH];
+	ZeroMemory(szPath, MAX_PATH);
+	ZeroMemory(szTemp, MAX_PATH);
+	::GetTempPathA(MAX_PATH, szTemp);
+	::GetModuleFileNameA(NULL, szPath, MAX_PATH);
+	if (PathRemoveFileSpecA(szPath))
+	{
+		strcat_s(szPath, "\\update.exe %1% %2%");
+		strCommandlineArg = szPath;
+		strCommandlineArg = str(boost::format(strCommandlineArg) % arg0str % szTemp);
+		BOOL bRet = ::CreateProcessA(NULL,           // 不在此指定可执行文件的文件名
+			const_cast<char*>(strCommandlineArg.c_str()),      // 命令行参数
+			NULL,           // 默认进程安全性
+			NULL,           // 默认线程安全性
+			FALSE,          // 指定当前进程内的句柄不可以被子进程继承
+			NULL, 
+			NULL,           // 使用本进程的环境变量
+			NULL,           // 使用本进程的驱动器和目录
+			&si,
+			&pi);
+		::CloseHandle(pi.hProcess);
+		::PostMessage(GetInstance()->m_hwnd, UI_QUIT_MSG, NULL, NULL);
+	}
+	return jsUndefined();
+}
+
+jsValue CWkeWindow::isUpdate(jsExecState es, void* param)
+{
+	if (!param)return jsUndefined();
+	//获取参数的数量
+	int argCount = jsArgCount(es);
+	if (argCount != 1)
+		return jsUndefined();
+	jsType type = jsArgType(es, 0);
+	if (JSTYPE_STRING != type)
+		return jsUndefined();
+	jsValue arg0 = jsArg(es, 0);
+	std::string arg0str = jsToTempString(es, arg0);
+	if(arg0str.empty())
+		return jsUndefined();
+	std::string strUpdateUrl = API_DOMAIN_NAME;
+	strUpdateUrl += "/update.php?version=" + arg0str;
+	HttpRequest updateHttp;
+	updateHttp.Send(GET, strUpdateUrl);
+	strUpdateUrl = updateHttp.GetResponseText();
+	return jsString(es, strUpdateUrl.c_str());
 }
 
 jsValue CWkeWindow::DownloadUserFile(jsExecState es, void* param)
