@@ -4,7 +4,8 @@
 /include
 /lib
 /LocalStorage
-
+/update/Debug
+/update/Release
 #防止编译器生成的文件也上传
 /Debug
 /Release
