@@ -78,6 +78,7 @@ typedef struct retryCount
 #define UI_UPDATE_OFF_LINE_LIST_MSG WM_USER + 0x113
 #define UI_UPDATE_USER_FILE_DATA_MSG WM_USER +0x114
 #define UI_QUIT_MSG WM_USER +0x115
+#define UI_SHOW_ERROR_MSG WM_USER + 0x116
 /*
 自定义消息结束
 */
@@ -101,7 +102,7 @@ typedef struct retryCount
 #define ARIA2_FORCEPAUSEALL "{\"method\":\"aria2.forcePauseAll\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
 #define ARIA2_UNAUSEALL "{\"method\":\"aria2.unpauseAll\",\"params\":[\"token:CDP\"],\"id\":1,\"jsonrpc\":\"2.0\"}"
 //ARIA2http请求协议
-#define ARIA2_HTTP_REQUESTURL "http://127.0.0.1:6800/jsonrpc"
+#define ARIA2_HTTP_REQUESTURL "http://127.0.0.1:6810/jsonrpc"
 //用定时器更新发送查询数据
 #define UPDTAE_UI_TIMEID 508
 //API请求主域名

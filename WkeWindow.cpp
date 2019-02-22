@@ -588,6 +588,25 @@ LRESULT CALLBACK CWkeWindow::MainProc(_In_ HWND hwnd, _In_ UINT uMsg, _In_ WPARA
 		::PostQuitMessage(0);
 	}
 	break;
+	case UI_SHOW_ERROR_MSG:
+	{
+		static auto showErrormsg = [](std::string& Strmsg) {
+			std::string buffer = Strmsg;
+			buffer = GetInstance()->m_BaiduPare.Gbk_To_Utf8(buffer.c_str());
+			jsExecState es = wkeGlobalExec(app.window);
+			jsValue thisObject = jsGetGlobal(es, "app");
+			jsValue func = jsGet(es, thisObject, "showErrorMessage");
+			jsValue jsArg[1] = { jsString(es, buffer.c_str()) };
+			jsCall(es, func, thisObject, jsArg, 1);
+		};
+		if (lParam)
+		{
+			const char* pbuffer = (const char*)lParam;
+			std::string strResultJson(pbuffer);
+			delete pbuffer;
+			showErrormsg(strResultJson);
+		}
+	}
 	default:
 		break;
 	}
@@ -776,6 +795,8 @@ void CWkeWindow::on_close(websocketpp::connection_hdl hdl)
 
 void CWkeWindow::on_fail(websocketpp::connection_hdl hdl)
 {
+	LOG(ERROR) << "websoket启动失败";
+	::PostMessage(m_hwnd, UI_SHOW_ERROR_MSG, NULL, (LPARAM)AlloclocalHeap("websoket启动失败,请右键管理员身份运行"));
 	hdl.reset();
 }
 
@@ -793,7 +814,7 @@ void CWkeWindow::start(std::string uri)
 void CWkeWindow::Connect()
 {
 	try{
-		start("ws://127.0.0.1:6800/jsonrpc");
+		start("ws://127.0.0.1:6810/jsonrpc");
 	}
 	catch (websocketpp::exception const & e) {
 		//std::cout << e.what() << std::endl;
@@ -825,9 +846,15 @@ BOOL CWkeWindow::RunAria2()
 	si.cb = sizeof(si);
 	ZeroMemory(&pi, sizeof(pi));
 	si.dwFlags = STARTF_USESHOWWINDOW;  // 指定wShowWindow成员有效
+#if !_DEBUG
 	si.wShowWindow = false;          // 此成员设为TRUE的话则显示新建进程的主窗口，
-	std::string strCommandlineArg = str(boost::format("aria2c.exe --check-certificate=false --disable-ipv6=true --enable-rpc=true --quiet=true --file-allocation=falloc --max-concurrent-downloads=5  --rpc-allow-origin-all=true --rpc-listen-all=true --rpc-listen-port=6800 --rpc-secret=CDP --stop-with-process=%1%")\
+	std::string strCommandlineArg = str(boost::format("aria2c.exe --check-certificate=false --disable-ipv6=true --enable-rpc=true --quiet=true --file-allocation=falloc --max-concurrent-downloads=5  --rpc-allow-origin-all=true --rpc-listen-all=true --rpc-listen-port=6810 --rpc-secret=CDP --stop-with-process=%1%")\
 		% std::to_string(GetCurrentProcessId()));
+#else
+	si.wShowWindow = true;          // 此成员设为TRUE的话则显示新建进程的主窗口，
+	std::string strCommandlineArg = str(boost::format("aria2c.exe --check-certificate=false --disable-ipv6=true --enable-rpc=true --quiet=false --file-allocation=falloc --max-concurrent-downloads=5  --rpc-allow-origin-all=true --rpc-listen-all=true --rpc-listen-port=6810 --rpc-secret=CDP --stop-with-process=%1%")\
+		% std::to_string(GetCurrentProcessId()));
+#endif
 	BOOL bRet = ::CreateProcessA(NULL,           // 不在此指定可执行文件的文件名
 		const_cast<char*>(strCommandlineArg.c_str()),      // 命令行参数
 		NULL,           // 默认进程安全性
@@ -1388,11 +1415,6 @@ jsValue CWkeWindow::LogOut(jsExecState es, void* param)
 		GetInstance()->m_BaiduPare.WriteFileBuffer(szModeleName, const_cast<char*>(strJsonData.c_str()), strJsonData.length());
 	}
 	wkeRunJS(app.window, "app.tablelistisShwo = false;app.DiskUsed = '';  app.DiskTotal = '';");
-	HttpRequest BaiduHttp;
-	BaiduHttp.SetHttpRedirect(true);
-	BaiduHttp.SetRequestCookies(GetInstance()->strCookies);
-	BaiduHttp.Send(GET, "https://passport.baidu.com/?logout&u=https%3A%2F%2Fpan.baidu.com%2F");
-	std::string strResult = BaiduHttp.GetallResponseHeaders();
 	GetInstance()->strCookies = "";
 	GetInstance()->isLogin = false;
 	return jsUndefined();
@@ -1853,7 +1875,8 @@ jsValue CWkeWindow::DownloadUserFile(jsExecState es, void* param)
 	std::string arg0str = jsToTempString(es, arg0);
 	//arg0str = GetInstance()->m_BaiduPare.Utf8_To_Gbk(arg0str.c_str());
 	auto proc = [arg0str]() {
-		GetInstance()->DownloadUserLocalFile(arg0str);
+		if (!GetInstance()->DownloadUserLocalFile(arg0str))
+			LOG(INFO) << arg0str + "\t下载失败";
 	};
 	std::thread DownloadProc(proc);
 	DownloadProc.detach();
@@ -2346,6 +2369,7 @@ bool CWkeWindow::DownloadUserLocalFile(const std::string& strJsonData)
 						if (!strAddurl.empty())
 						{
 							SendText(strAddurl);
+							bResult = true;
 						}
 					}
 					//CreateDowndAria2Json
